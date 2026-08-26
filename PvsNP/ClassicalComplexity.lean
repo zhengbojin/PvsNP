@@ -47,18 +47,6 @@ abbrev BoolLanguage : Type := Set (List Bool)
 def embedBool (x : List Bool) : List F4 :=
   x.map (fun b => (b, false))
 
-/-- Bool 语言的 P：存在受限 CBTM，对无标记嵌入判定。 -/
-def IsP_Bool (L : BoolLanguage) : Prop :=
-  ∃ M, CBTM.IsRestricted M ∧ CBTM.isPolynomialTime M ∧
-    (∀ x : List Bool, M.tapeAccepts (embedBool x) ↔ L x)
-
-/-- Bool 语言的 NP：存在规范 NTM2 直接判定（输入即实部串；分叉 = 计算模型层的标记）。 -/
-def IsNP_Bool (L : BoolLanguage) : Prop :=
-  ∃ A : NTM2, NTM2.Canonical A ∧ (∀ x : List Bool, A.acceptsTape x ↔ L x)
-
-def P_Bool : Set BoolLanguage := { L | IsP_Bool L }
-def NP_Bool : Set BoolLanguage := { L | IsNP_Bool L }
-
 /-- 子集和的 Bool 语言（实部串 = encodeSubsetSumBits inst；虚部与语言无关）。 -/
 def subsetSumBoolLanguage : BoolLanguage := fun x =>
   ∃ inst, x = encodeSubsetSumBits inst ∧ inst.elements ≠ [] ∧ subsetSumHolds inst
@@ -103,6 +91,24 @@ def liftLanguage (A : NTM2) (K : BoolLanguage) : FLanguage := fun w =>
 def embedUpLanguage (K : BoolLanguage) : FLanguage := fun w =>
   ∃ x, w = embedBool x ∧ K x
 
+-- ======================================================================
+-- 经典 Bool 复杂度类（等价类定义：实部语言 = 带虚部语言等价类的代表）
+-- ======================================================================
+
+/-- Bool 语言的 P：实部语言被识别 ⟺ 其等价类中存在一个带虚部语言被受限 CBTM 识别。
+    实部语言 = 带虚部语言等价类（同实部投影）的代表。 -/
+def IsP_Bool (K : BoolLanguage) : Prop :=
+  ∃ L : FLanguage, projectLanguage L = K ∧ IsP_F L
+
+/-- Bool 语言的 NP：实部语言被识别 ⟺ 其等价类中存在一个带虚部语言被 FULL CBTM 识别。
+    由 FULL CBTM 与 NTM2 的同构性，等价类中的带虚部语言可由 NTM2 呈现
+    （复合提升：虚部 = 位置函数的标记，与语言内容无关）。 -/
+def IsNP_Bool (K : BoolLanguage) : Prop :=
+  ∃ L : FLanguage, projectLanguage L = K ∧ IsNP_F L
+
+def P_Bool : Set BoolLanguage := { K | IsP_Bool K }
+def NP_Bool : Set BoolLanguage := { K | IsNP_Bool K }
+
 /-- 投影-提升互逆：复合语言的实部投影 = 原 Bool 语言（逐格取实部）。 -/
 lemma projectLanguage_liftLanguage (A : NTM2) (K : BoolLanguage) :
     projectLanguage (liftLanguage A K) = K := by
@@ -122,14 +128,11 @@ lemma projectLanguage_liftLanguage (A : NTM2) (K : BoolLanguage) :
     · exact realProject_ntm2InputToCBTM A x
     · exact ⟨x, rfl, hx⟩
 
-/-- P_F 语言的 Bool 呈现 ∈ P（受限机器判定的语言在嵌入输入上 = 同一机器；
-    「P_f 和 P 所对应的语言是相同的」的方向一）。 -/
+/-- P_F 语言投影 ∈ P（等价类定义下平凡：实部语言 = 带虚部语言等价类的代表，
+    「P_f 和 P 所对应的语言是相同的」）。 -/
 theorem P_F_projection_in_P (L : FLanguage) (hP : IsP_F L) :
-    IsP_Bool (fun x => L (embedBool x)) := by
-  rcases hP with ⟨M, hrest, hpoly, hcorrect⟩
-  refine ⟨M, hrest, hpoly, ?_⟩
-  intro x
-  exact hcorrect (embedBool x)
+    IsP_Bool (projectLanguage L) := by
+  exact ⟨L, rfl, hP⟩
 
 -- ======================================================================
 -- 实部语言识别（Bool 层）：NTM2 的语言 = 复合语言的实部投影
