@@ -254,7 +254,8 @@ structure NTM2 where
   acceptStates : Finset ℕ
   rejectStates : Finset ℕ
   alphabet : Finset Bool
-  /-- 转移依赖磁头位置：(q, 读符号, 磁头位置) → 结果集（写符号、方向）。 -/
+  /-- 转移依赖磁头位置：(q, 读符号, 磁头位置) → 结果集（写符号、方向）。
+      分支是存在性定义：转移关系先行，vb[i] 由此派生。 -/
   transition : ℕ × Bool × ℤ → Finset (ℕ × Bool × Dir)
   blankSym : Bool
   h_blank_in_alphabet : blankSym ∈ alphabet
@@ -262,21 +263,23 @@ structure NTM2 where
   h_accept_subset : acceptStates ⊆ states
   h_reject_subset : rejectStates ⊆ states
   h_accept_reject_disjoint : acceptStates ∩ rejectStates = ∅
-  /-- 虚拟虚部带（第二条带）：vb[i] = 位置 i 的虚部系数，与读符号（实部）完全无关。 -/
-  vb : ℤ → Bool
-  /-- card 与 vb 恒对应：card = vb[磁头位置] + 1（vb=0 → 1 结果，vb=1 → 2 结果）。 -/
-  h_branch_axiom : ∀ q b i, b ∈ alphabet → (transition (q, b, i)).card = if vb i then 2 else 1
+  /-- 分支存在性：每步 1 或 2 个结果（card = vb[i] + 1，vb 由此派生）。 -/
+  h_branch_axiom : ∀ q b i, b ∈ alphabet → (transition (q, b, i)).card = 1 ∨ (transition (q, b, i)).card = 2
+  /-- 位置分支一致性：同一磁头位置的分支数不依赖状态与读符号（vb[i] 良定义）。 -/
+  h_card_pos_indep : ∀ q b q' b' i, b ∈ alphabet → b' ∈ alphabet →
+    (transition (q, b, i)).card = (transition (q', b', i)).card
   h_accept_singleton : acceptStates.card = 1
   h_reject_singleton : rejectStates.card = 1
   h_alphabet_all : alphabet = {false, true}
   h_transition_state_mem : ∀ q b i, b ∈ alphabet → ∀ r ∈ (transition (q, b, i)), r.1 ∈ states
-  /-- 投影约束：非分支位置（vb=0）的读 → 写回位置也非分支。 -/
-  h_projection_constraint : ∀ q b i, b ∈ alphabet → vb i = false →
-    ∀ r ∈ (transition (q, b, i)), vb (i + r.2.2.toInt) = false
 
+/-- 派生虚拟虚部带：vb[i] = 位置 i 的分支标志（card = 2 ⟺ 分叉）。
+    先有转移关系，再有 vb；vb 与读符号（实部）完全无关（h_card_pos_indep）。 -/
+def NTM2.vbAt (A : NTM2) (i : ℤ) : Bool :=
+  (A.transition (A.startState, A.blankSym, i)).card = 2
 
--- IsVb 定义放在结构体之后，避免引用未定义类型
-def IsVb (A : NTM2) (i : ℤ) : Prop := A.vb i = true
+/-- 位置 i 处是否分叉（vb = 1）。 -/
+def IsVb (A : NTM2) (i : ℤ) : Prop := NTM2.vbAt A i = true
 
 
 structure NTM2TransitionStep where
@@ -316,42 +319,47 @@ def NTM2.accepts (A : NTM2) (x : List Bool) : Prop :=
 -- NTM2 磁带语义（与 CBTM/DTM 对齐：带头 + 初始配置 + 步进）
 -- ============================================================================
 
-/-- NTM2 的格局：状态、实部磁带、磁头位置（虚部 = 虚拟带 vb，机器级恒定）。 -/
-structure NTM2Config (A : NTM2) (input : List F4) where
+/-- NTM2 的格局：状态、复合磁带（tape × vb，每格 = 实部 × 虚部，与 CBTM 对齐）、磁头位置。
+    输入是 Bool 串（与虚部无关）；虚部 = vb 带（由转移关系派生的机器内部信息，
+    只与输入的模式对应）。 -/
+structure NTM2Config (A : NTM2) (input : List Bool) where
   state : ℕ
-  tape : ℤ → Bool
+  tape : ℤ → F4
   headPos : ℤ
 
-/-- NTM2 初始磁带（实部投影）：输入写在 [0, n)，其余为空白符号；虚部 = A.vb。 -/
-def NTM2InitialTape (input : List F4) (blank : Bool) : ℤ → Bool :=
-  fun i => if h : 0 ≤ i ∧ i.toNat < input.length then (input.get ⟨i.toNat, h.2⟩).1 else blank
+/-- NTM2 初始磁带：输入（Bool 串）写在 [0, n)（实部 = 输入，虚部 = vb 带），
+    空白区 = (blankSym, vbAt 0) 常数（与 CBTM 的常数空白符号对齐）。 -/
+def NTM2InitialTape (A : NTM2) (input : List Bool) : ℤ → F4 :=
+  fun i => if h : 0 ≤ i ∧ i.toNat < input.length then
+      (input.get ⟨i.toNat, h.2⟩, A.vbAt i)
+    else (A.blankSym, A.vbAt 0)
 
 /-- NTM2 初始配置。 -/
-def NTM2InitialConfig (A : NTM2) (input : List F4) : NTM2Config A input :=
-  { state := A.startState, tape := NTM2InitialTape input A.blankSym, headPos := 0 }
+def NTM2InitialConfig (A : NTM2) (input : List Bool) : NTM2Config A input :=
+  { state := A.startState, tape := NTM2InitialTape A input, headPos := 0 }
 
-/-- NTM2 一步格局：写 result.2.1 到带头位置，移动带头（按 Dir），更新状态。 -/
-def NTM2StepConfig {A : NTM2} {input : List F4} (cfg : NTM2Config A input)
+/-- NTM2 一步格局：写 result.2.1（实部）到带头位置（虚部保持 vb 带），移动带头，更新状态。 -/
+def NTM2StepConfig {A : NTM2} {input : List Bool} (cfg : NTM2Config A input)
     (r : ℕ × Bool × Dir) : NTM2Config A input :=
   { state := r.1,
-    tape := fun i => if i = cfg.headPos then r.2.1 else cfg.tape i,
+    tape := fun i => if i = cfg.headPos then (r.2.1, (cfg.tape cfg.headPos).2) else cfg.tape i,
     headPos := cfg.headPos + r.2.2.toInt }
 
 /-- NTM2 磁带语义的可达路径：每步读 headPos 处的格子（实部），写 r.2.1，移动 r.2.2。
-    转移依赖磁头位置；虚部（分支性）由虚拟带 vb 在磁头位置的值决定。 -/
-inductive TapeReachablePathNTM2 (A : NTM2) (input : List F4) :
+    转移依赖磁头位置；虚部（分支性）由派生带 vb 在磁头位置的值决定。 -/
+inductive TapeReachablePathNTM2 (A : NTM2) (input : List Bool) :
     NTM2ComputationPath → NTM2Config A input → Prop
   | nil : TapeReachablePathNTM2 A input [] (NTM2InitialConfig A input)
   | cons : ∀ (π₀ : NTM2ComputationPath) (step : NTM2TransitionStep) (cfg : NTM2Config A input),
       TapeReachablePathNTM2 A input π₀ cfg →
       step.fromState = cfg.state →
-      step.readSym = cfg.tape cfg.headPos →
+      step.readSym = (cfg.tape cfg.headPos).1 →
       step.pos = cfg.headPos →
-      step.result ∈ A.transition (cfg.state, cfg.tape cfg.headPos, cfg.headPos) →
+      step.result ∈ A.transition (cfg.state, (cfg.tape cfg.headPos).1, cfg.headPos) →
       TapeReachablePathNTM2 A input (π₀ ++ [step]) (NTM2StepConfig cfg step.result)
 
 /-- NTM2 磁带语义的接受：存在一条磁带可达路径，其末端状态在接受态。 -/
-def NTM2.acceptsTape (A : NTM2) (x : List F4) : Prop :=
+def NTM2.acceptsTape (A : NTM2) (x : List Bool) : Prop :=
   ∃ π, ∃ cfg : NTM2Config A x, TapeReachablePathNTM2 A x π cfg ∧ cfg.state ∈ A.acceptStates
 
 

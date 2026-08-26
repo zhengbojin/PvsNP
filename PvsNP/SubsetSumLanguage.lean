@@ -344,7 +344,7 @@ lemma tapeReachable_sim_under_unread_update {M : CBTM} {w w' : List F4} {π : Co
           rw [h_read]
           rw [← hhp₀]
           rw [← htp₀ cfg₀.headPos hcfg₀_head_ne]
-        have htrans' : step.result ∈ M.transition (cfg₀'.state, cfg₀'.tapeAt cfg₀'.headPos) := by
+        have htrans' : step.result ∈ M.transition (cfg₀'.state, cfg₀'.tapeAt cfg₀'.headPos, cfg₀'.headPos) := by
           have hst' : cfg₀'.state = step.fromState := by rw [← hst₀, ← h_from]
           rw [hst']
           rw [h_from]
