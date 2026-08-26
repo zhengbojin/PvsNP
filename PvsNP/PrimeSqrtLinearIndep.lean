@@ -32,7 +32,7 @@ set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.style.multiGoal false
 set_option linter.style.whitespace false
-
+set_option linter.unusedFintypeInType false
 
 namespace PvsNP
 

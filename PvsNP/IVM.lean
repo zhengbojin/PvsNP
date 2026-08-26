@@ -43,174 +43,6 @@ def List.toBoolList (w : List F4) : List Bool :=
 def accepts_bool (M : CBTM) (x : List Bool) : Prop :=
   ∃ w : List F4, List.toBoolList w = x ∧ M.accepts w
 
--- ======================================================================
--- NTM2 ↔ CBTM 的接受性等价
--- ======================================================================
-
-/-- NTM2 输入在 CBTM 中的 F4 编码。 -/
-def NTM2.toCBTMInput (A : NTM2) (x : List Bool) : List F4 :=
-  x.map (fun b => f4OfVb A.vb b)
-
-@[simp] theorem NTM2_toCBTMInput_toBoolList (A : NTM2) (x : List Bool) :
-    List.toBoolList (NTM2.toCBTMInput A x) = x := by
-  unfold NTM2.toCBTMInput List.toBoolList
-  rw [List.map_map]
-  have hcomp : F4.re ∘ (fun b : Bool => f4OfVb A.vb b) = fun b : Bool => b := by
-    funext b
-    simp [f4OfVb]
-  rw [hcomp, List.map_id']
-
-/-- CBTM 步 → NTM2 步。 -/
-def cbtmStepToNTM2 (A : NTM2) (step : TransitionStep) : NTM2TransitionStep :=
-  { fromState := step.fromState
-    readSym := F4.re step.readSym
-    result := (step.result.nextState, F4.re step.result.writeSym, step.result.moveDir) }
-
-/-- NTM2 步 → CBTM 步。 -/
-def ntm2StepToCBTM (A : NTM2) (step : NTM2TransitionStep) : TransitionStep :=
-  { fromState := step.fromState
-    readSym := f4OfVb A.vb step.readSym
-    result := ⟨step.result.1, f4OfVb A.vb step.result.2.1, step.result.2.2⟩ }
-
-/-- CBTM 路径 → NTM2 路径。 -/
-def cbtmPathToNTM2 (A : NTM2) (π : ComputationPath) : NTM2ComputationPath :=
-  π.map (cbtmStepToNTM2 A)
-
-/-- NTM2 路径 → CBTM 路径。 -/
-def ntm2PathToCBTM (A : NTM2) (π : NTM2ComputationPath) : ComputationPath :=
-  π.map (ntm2StepToCBTM A)
-
-/-- NTM2→CBTM 路径对应下末端状态不变。 -/
-lemma ntm2PathToCBTM_endState (A : NTM2) (π : NTM2ComputationPath) :
-    ComputationPath.endState (NTM2.toCBTM A) (ntm2PathToCBTM A π) =
-      NTM2ComputationPath.endState A π := by
-  unfold ComputationPath.endState NTM2ComputationPath.endState ntm2PathToCBTM
-  rw [foldl_map_endState (ntm2StepToCBTM A) (fun s : TransitionStep => s.result.nextState)
-    (fun s : NTM2TransitionStep => s.result.1) (NTM2.toCBTM A).startState π
-    (by intro a; simp [ntm2StepToCBTM])]
-  rw [toCBTM_startState]
-
-/-- CBTM→NTM2 路径对应下末端状态不变。 -/
-lemma cbtmPathToNTM2_endState (A : NTM2) (π : ComputationPath) :
-    NTM2ComputationPath.endState A (cbtmPathToNTM2 A π) =
-      ComputationPath.endState (NTM2.toCBTM A) π := by
-  unfold ComputationPath.endState NTM2ComputationPath.endState cbtmPathToNTM2
-  rw [foldl_map_endState (cbtmStepToNTM2 A) (fun s : NTM2TransitionStep => s.result.1)
-    (fun s : TransitionStep => s.result.nextState) A.startState π
-    (by intro a; simp [cbtmStepToNTM2])]
-  rw [toCBTM_startState]
-
-/-- NTM2 步的转移结果在 CBTM 中的像。 -/
-lemma ntm2StepToCBTM_result_mem {A : NTM2} {q : ℕ} {a : Bool} {step : NTM2TransitionStep}
-    (hstep : step.result ∈ A.transition q a) :
-    (ntm2StepToCBTM A step).result ∈ (A.transition q a).image
-        (fun r : ℕ × Bool × Dir => CBTMTransResult.mk r.1 (f4OfVb A.vb r.2.1) r.2.2) := by
-  unfold ntm2StepToCBTM
-  exact Finset.mem_image_of_mem
-    (fun r : ℕ × Bool × Dir => CBTMTransResult.mk r.1 (f4OfVb A.vb r.2.1) r.2.2) hstep
-
-/-- CBTM 步（在 toCBTM A 的可达步上）对应回 NTM2 转移。 -/
-lemma cbtmStepToNTM2_result_mem {A : NTM2} {q : ℕ} {a : F4} {step : TransitionStep}
-    (hstep : step.result ∈ (A.transition q (F4.re a)).image
-        (fun r : ℕ × Bool × Dir => CBTMTransResult.mk r.1 (f4OfVb A.vb r.2.1) r.2.2)) :
-    (cbtmStepToNTM2 A step).result ∈ A.transition q (F4.re a) := by
-  rcases Finset.mem_image.mp hstep with ⟨r, hr, hr_eq⟩
-  have hres : (cbtmStepToNTM2 A step).result = r := by
-    simp [cbtmStepToNTM2]
-    rw [← hr_eq]
-    simp [f4OfVb]
-  rw [hres]
-  exact hr
-
-/-- NTM2 → CBTM 保持可达性。 -/
-lemma reachable_NTM2_to_CBTM (A : NTM2) {x : List Bool} {π : NTM2ComputationPath}
-    (h : ReachablePathNTM2 A x π) :
-    ReachablePath (NTM2.toCBTM A) (NTM2.toCBTMInput A x) (ntm2PathToCBTM A π) := by
-  induction h with
-  | nil => simpa [NTM2.toCBTMInput, ntm2PathToCBTM] using ReachablePath.nil
-  | cons xs a π₀ step h_ind h_from h_read h_trans ih =>
-      simp [NTM2.toCBTMInput, ntm2PathToCBTM]
-      refine ReachablePath.cons (List.map (fun b => f4OfVb A.vb b) xs) (f4OfVb A.vb a)
-        (ntm2PathToCBTM A π₀) (ntm2StepToCBTM A step) ih ?_ ?_ ?_
-      · simp [ntm2StepToCBTM]
-        rw [ntm2PathToCBTM_endState A π₀]
-        exact h_from
-      · simp [ntm2StepToCBTM]
-        rw [h_read]
-      · have hresult : (ntm2StepToCBTM A step).result ∈
-            (A.transition (NTM2ComputationPath.endState A π₀) a).image
-              (fun r : ℕ × Bool × Dir => CBTMTransResult.mk r.1 (f4OfVb A.vb r.2.1) r.2.2) :=
-          ntm2StepToCBTM_result_mem h_trans
-        rw [ntm2PathToCBTM_endState A π₀]
-        rw [toCBTM_transition]
-        rw [toCBTMTrans_eq_of_mem A (NTM2ComputationPath.endState A π₀) (f4OfVb A.vb a)
-          (by exact (mem_NTM2AlphabetOf_iff A.vb (f4OfVb A.vb a)).2 rfl)]
-        simpa [f4OfVb] using hresult
-
-/-- CBTM → NTM2 保持可达性。 -/
-lemma reachable_CBTM_to_NTM2 (A : NTM2) {w : List F4} {π' : ComputationPath}
-    (h : ReachablePath (NTM2.toCBTM A) w π') :
-    ReachablePathNTM2 A (List.toBoolList w) (cbtmPathToNTM2 A π') := by
-  induction h with
-  | nil => simpa [cbtmPathToNTM2, List.toBoolList] using ReachablePathNTM2.nil
-  | cons xs a π₀ step h_ind h_from h_read h_trans ih =>
-      simp [cbtmPathToNTM2, List.toBoolList]
-      refine ReachablePathNTM2.cons (List.toBoolList xs) (F4.re a)
-        (cbtmPathToNTM2 A π₀) (cbtmStepToNTM2 A step) ih ?_ ?_ ?_
-      · simp [cbtmStepToNTM2]
-        rw [cbtmPathToNTM2_endState A π₀]
-        exact h_from
-      · simp [cbtmStepToNTM2]
-        rw [h_read]
-      · have ha : a ∈ NTM2AlphabetOf A.vb := by
-          have ha_alphabet : a ∈ (NTM2.toCBTM A).alphabet := by
-            by_contra ha_not
-            have h_empty : (NTM2.toCBTM A).transition
-                (ComputationPath.endState (NTM2.toCBTM A) π₀, a) = ∅ :=
-              (NTM2.toCBTM A).h_transition_outside
-                (ComputationPath.endState (NTM2.toCBTM A) π₀) a ha_not
-            rw [h_empty] at h_trans
-            simp at h_trans
-          simpa [toCBTM_alphabet] using ha_alphabet
-        have htrans : step.result ∈
-            (A.transition (ComputationPath.endState (NTM2.toCBTM A) π₀) (F4.re a)).image
-              (fun r : ℕ × Bool × Dir => CBTMTransResult.mk r.1 (f4OfVb A.vb r.2.1) r.2.2) := by
-          have ht : step.result ∈ NTM2.toCBTMTrans A
-              (ComputationPath.endState (NTM2.toCBTM A) π₀, a) := by
-            simpa [toCBTM_transition] using h_trans
-          rw [toCBTMTrans_eq_of_mem A (ComputationPath.endState (NTM2.toCBTM A) π₀) a ha] at ht
-          simpa using ht
-        have hres : (cbtmStepToNTM2 A step).result ∈
-            A.transition (ComputationPath.endState (NTM2.toCBTM A) π₀) (F4.re a) :=
-          cbtmStepToNTM2_result_mem htrans
-        rw [cbtmPathToNTM2_endState A π₀]
-        exact hres
-
-/-- NTM2 → CBTM 保持接受性：accepts_bool (toCBTM A) x ⟷ NTM2.accepts A x。 -/
-theorem accepts_bool_NTM2_toCBTM_iff (A : NTM2) (x : List Bool) :
-    accepts_bool (NTM2.toCBTM A) x ↔ NTM2.accepts A x := by
-  constructor
-  · intro h
-    rcases h with ⟨w, hw, ⟨π', hr', ha'⟩⟩
-    have hr : ReachablePathNTM2 A (List.toBoolList w) (cbtmPathToNTM2 A π') :=
-      reachable_CBTM_to_NTM2 A hr'
-    have hend : NTM2ComputationPath.endState A (cbtmPathToNTM2 A π') =
-        ComputationPath.endState (NTM2.toCBTM A) π' :=
-      cbtmPathToNTM2_endState A π'
-    have hacc : NTM2ComputationPath.endState A (cbtmPathToNTM2 A π') ∈ A.acceptStates := by
-      rw [hend]
-      unfold ReachablePath.isAccepting at ha'
-      simpa [toCBTM_acceptStates] using ((Bool.decide_iff _).mp ha')
-    rw [← hw]
-    exact ⟨cbtmPathToNTM2 A π', hr, hacc⟩
-  · intro h
-    rcases h with ⟨π, hr, hacc⟩
-    refine ⟨NTM2.toCBTMInput A x, NTM2_toCBTMInput_toBoolList A x, ?_⟩
-    refine ⟨ntm2PathToCBTM A π, reachable_NTM2_to_CBTM A hr, ?_⟩
-    · unfold ReachablePath.isAccepting
-      rw [ntm2PathToCBTM_endState A π, toCBTM_acceptStates]
-      exact (Bool.decide_iff _).mpr hacc
-
 /-- 多项式时间确定性语言类 P。 -/
 structure IsP (L : Language) : Prop where
   exists_restricted : ∃ (M : CBTM), CBTM.IsRestricted M ∧ CBTM.isPolynomialTime M ∧
@@ -253,29 +85,6 @@ def activatedGenSetOnPath (π : ComputationPath) : Finset ℕ :=
 -- ======================================================================
 -- 核心引理：受限输入 → 路径读符号虚部全假
 -- ======================================================================
-
-/-- 若输入列表虚部全假，则任何可达路径上所有读符号虚部均为假。 -/
-lemma reachable_steps_im_false_aux {M : CBTM} {xs : List F4} {π : ComputationPath}
-    (hr : ReachablePath M xs π) :
-    (∀ s ∈ xs, F4.im s = false) → ∀ step ∈ π, F4.im step.readSym = false := by
-  induction hr with
-  | nil =>
-    intro h_im step hstep
-    simp at hstep
-  | cons xs' a π₀ step' h_ind h_from h_read h_trans ih =>
-    intro h_im
-    have hxs'_im : ∀ s ∈ xs', F4.im s = false := by
-      intro s hs
-      apply h_im s
-      exact (List.mem_append.mpr (Or.inl hs))
-    have ha_im : F4.im a = false := h_im a (by simp)
-    have ih_steps : ∀ step ∈ π₀, F4.im step.readSym = false := ih hxs'_im
-    intro step hstep
-    rcases List.mem_append.mp hstep with (h | h)
-    · exact ih_steps step h
-    · rcases List.mem_singleton.mp h with rfl
-      rw [h_read]
-      exact ha_im
 
 -- ======================================================================
 -- 生成元（全局共用）与 IVM 虚拟机结构
@@ -353,7 +162,7 @@ inductive TapeReachablePath (M : CBTM) (input : List F4) :
       TapeReachablePath M input π₀ cfg →
       step.fromState = cfg.state →
       step.readSym = cfg.tapeAt cfg.headPos →
-      step.result ∈ M.transition (cfg.state, cfg.tapeAt cfg.headPos) →
+      step.result ∈ M.transition (cfg.state, cfg.tapeAt cfg.headPos, cfg.headPos) →
       TapeReachablePath M input (π₀ ++ [step]) (stepConfig cfg step.result)
 
 /-- 磁带语义的接受：存在一条磁带可达路径，其末端状态在接受态。 -/
@@ -462,8 +271,8 @@ lemma tapeReachablePath_read_in_alphabet {M : CBTM} {x : List F4} {π : Computat
     · exact ih s hm
     · rcases List.mem_singleton.mp hm with rfl
       by_contra hnot
-      have hempty : M.transition (cfg'.state, cfg'.tapeAt cfg'.headPos) = ∅ :=
-        M.h_transition_outside (cfg'.state) (cfg'.tapeAt cfg'.headPos)
+      have hempty : M.transition (cfg'.state, cfg'.tapeAt cfg'.headPos, cfg'.headPos) = ∅ :=
+        M.h_transition_outside (cfg'.state) (cfg'.tapeAt cfg'.headPos) cfg'.headPos
           (by simpa [h_read] using hnot)
       rw [hempty] at h_trans
       simp at h_trans
@@ -620,9 +429,9 @@ theorem IVM.activatedGenSet_card_eq_branchCount (M : IVM) (π : ComputationPath)
 
 noncomputable def IVM.kappa_M (M : IVM) : ℕ := by
   classical
-  by_cases h : ∃ π, ReachablePath M.machine M.input π ∧ ReachablePath.isAccepting M.machine π = true
+  by_cases h : ∃ π, ReachablePath M.machine M.input 0 π ∧ ReachablePath.isAccepting M.machine π = true
   · let P : ℕ → Prop := fun n =>
-      ∃ π, ReachablePath M.machine M.input π ∧ ReachablePath.isAccepting M.machine π = true ∧
+      ∃ π, ReachablePath M.machine M.input 0 π ∧ ReachablePath.isAccepting M.machine π = true ∧
         (M.activatedGensOnPath π).card = n
     have h_ex : ∃ n, P n := by
       rcases h with ⟨π, hr, ha⟩
@@ -636,7 +445,7 @@ noncomputable def IVM.kappa_M (M : IVM) : ℕ := by
 
 /-- IVM 接受：内在 CBTM 存在一条接受路径（接受判定由 CBTM 完成，IVM 只是解释）。 -/
 def IVM.accepts (M : IVM) : Prop :=
-  ∃ π : ComputationPath, ReachablePath M.machine M.input π ∧
+  ∃ π : ComputationPath, ReachablePath M.machine M.input 0 π ∧
     ReachablePath.isAccepting M.machine π = true
 
 -- ======================================================================
@@ -648,7 +457,7 @@ def IVM.accepts (M : IVM) : Prop :=
     现有版本下（Finset 取代多重集，禁止无意义分支；每条接受路径消费整个输入）
     本机 κ 与单路径 κ 重合，但语义上仍取最大，以体现「路径最坏情形」。 -/
 noncomputable def IVM.kappa (M : IVM) : ℕ :=
-  sSup { n : ℕ | ∃ π : ComputationPath, ReachablePath M.machine M.input π ∧
+  sSup { n : ℕ | ∃ π : ComputationPath, ReachablePath M.machine M.input 0 π ∧
     ReachablePath.isAccepting M.machine π = true ∧ branchCount π = n }
 
 end PvsNP

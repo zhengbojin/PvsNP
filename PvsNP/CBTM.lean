@@ -139,6 +139,10 @@ def CBTM.accepts (M : CBTM) (x : List F4) : Prop :=
 -- §2.6 复杂度类辅助谓词
 -- ===========================================================================
 
+/-- 路径上虚部为 true 的符号个数（决策点计数）。 -/
+def imTrueCount (l : List F4) : ℕ :=
+  (l.filter (fun s => F4.im s)).length
+
 /-- 受限 CBTM：字母表仅含实部符号，转移确定（无分支）。 -/
 structure CBTM.IsRestricted (M : CBTM) : Prop where
   h_alphabet_subset : M.alphabet ⊆ {F4.zero, F4.one}
@@ -167,6 +171,7 @@ lemma card_eq_one_unique_mem {α : Type*} (s : Finset α) (h : s.card = 1) :
 structure IsCBTM0 (M : CBTM) : Prop where
   alphabet_eq : M.alphabet = {F4.zero, F4.one}
   card_one : ∀ q s i, s ∈ M.alphabet → (M.transition (q, s, i)).card = 1
+  pos_indep : ∀ q s i j, s ∈ M.alphabet → M.transition (q, s, i) = M.transition (q, s, j)
 
 -- ===========================================================================
 -- §4. 完全 CBTM
@@ -348,12 +353,15 @@ theorem exists_CBTM0_iso_ClassicDTM (M : ClassicDTM) :
     ∃ (N : CBTM), Nonempty (StructIsoClassicDTM M N) := by
   let N := M.toCBTM
   have h0 : IsCBTM0 N := by
-    refine ⟨rfl, ?_⟩
-    intro q s i hs
-    have hcases : s = F4.zero ∨ s = F4.one := by
-      dsimp [N] at hs
-      simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
-    rcases hcases with rfl | rfl <;> unfold N <;> simp [ClassicDTM.toCBTM]
+    refine ⟨rfl, ?_, ?_⟩
+    · intro q s i hs
+      have hcases : s = F4.zero ∨ s = F4.one := by
+        dsimp [N] at hs
+        simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
+      rcases hcases with rfl | rfl <;> unfold N <;> simp [ClassicDTM.toCBTM]
+    · intro q s i j hs
+      dsimp [N]
+      rfl
   let φ_symbol : Equiv Bool { s : F4 // s ∈ N.alphabet } := {
     toFun := fun b => ⟨boolToF4 b, boolToF4_mem_alphabet_of_isCBTM0 h0 b⟩
     invFun := fun s => f4ToBool s.1
@@ -405,20 +413,27 @@ theorem exists_ClassicDTM_iso_CBTM0 (N : CBTM) (h0 : IsCBTM0 N) :
       intro q s i
       have hφ_val (b : Bool) : (φ_symbol b).val = boolToF4 b := rfl
       let r' : CBTMTransResult :=
-        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, i))
-          (h0.card_one q (boolToF4 s) i (boolToF4_mem_alphabet_of_isCBTM0 h0 s))).choose
-      have hcard : (N.transition (q, boolToF4 s, i)).card = 1 :=
-        h0.card_one q (boolToF4 s) i (boolToF4_mem_alphabet_of_isCBTM0 h0 s)
-      have hr' : r' ∈ N.transition (q, boolToF4 s, i) :=
-        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, i)) hcard).choose_spec.1
+        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, 0))
+          (h0.card_one q (boolToF4 s) 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 s))).choose
+      have hcard : (N.transition (q, boolToF4 s, 0)).card = 1 :=
+        h0.card_one q (boolToF4 s) 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 s)
+      have hr' : r' ∈ N.transition (q, boolToF4 s, 0) :=
+        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, 0)) hcard).choose_spec.1
       have h_write_im : F4.im r'.writeSym = false :=
-        (N.h_projection_constraint q (boolToF4 s) i
+        (N.h_projection_constraint q (boolToF4 s) 0
           (boolToF4_mem_alphabet_of_isCBTM0 h0 s) (boolToF4_im_false s)).2 r' hr'
       have h_trans : M.transition (q, s) =
-          ClassicDTMTransitionResult.mk r'.nextState (f4ToBool r'.writeSym) r'.moveDir := rfl
+          ClassicDTMTransitionResult.mk r'.nextState (f4ToBool r'.writeSym) r'.moveDir := by
+        change CBTM.toClassicDTMTrans N h0 (q, s) =
+          ClassicDTMTransitionResult.mk r'.nextState (f4ToBool r'.writeSym) r'.moveDir
+        unfold CBTM.toClassicDTMTrans
+        dsimp
       simp only [hφ_val, h_trans]
+      have h_pos_indep : N.transition (q, boolToF4 s, i) = N.transition (q, boolToF4 s, 0) :=
+        h0.pos_indep q (boolToF4 s) i 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 s)
+      rw [h_pos_indep]
+      rw [eq_singleton_choose_of_card_eq_one (N.transition (q, boolToF4 s, 0)) hcard]
       rw [boolToF4_f4ToBool_of_im_false r'.writeSym h_write_im]
-      rw [eq_singleton_choose_of_card_eq_one (N.transition (q, boolToF4 s, i)) hcard]
   }⟩⟩
 
 -- ===========================================================================
@@ -508,6 +523,13 @@ def NTM2.toCBTM (A : NTM2) : CBTM :=
       simp [hc1]
       by_cases him : F4.im s
       · simp [him]
+        have hne : CBTMTransResult.mk A.startState F4.zero Dir.S ≠
+            CBTMTransResult.mk A.startState F4.one Dir.S := by
+          intro h
+          have hw : F4.zero = F4.one := by
+            simpa using (congrArg (fun x : CBTMTransResult => x.writeSym) h)
+          simp [F4.zero, F4.one] at hw
+        simp [hne]
       · simp [him]
   h_projection_constraint := by
     intro q s i hs him
@@ -516,17 +538,19 @@ def NTM2.toCBTM (A : NTM2) : CBTM :=
     by_cases hvb : F4.im s = A.vb i
     · have hcard := A.h_branch_axiom q s.1 i (mem_alphabet_NTM2 A s.1)
       have hc0 : s.1 ∈ A.alphabet ∧ F4.im s = A.vb i := ⟨mem_alphabet_NTM2 A s.1, hvb⟩
-      simp [hc0]
       have hvb0 : A.vb i = false := by
         rw [← hvb]
         exact him
       constructor
-      · rw [Finset.card_image_of_injective (A.transition (q, s.1, i)) (ntm2ResultToCBTM_injective A.vb i)]
+      · simp [hc0]
+        rw [Finset.card_image_of_injective (A.transition (q, s.1, i)) (ntm2ResultToCBTM_injective A.vb i)]
         simp [him, hvb0] at hcard ⊢
         exact hcard
       · intro r hr
-        rw [dif_pos hc0] at hr
-        rcases Finset.mem_image.mp hr with ⟨r0, hr0, rfl⟩
+        have hr' : r ∈ (A.transition (q, s.1, i)).image (ntm2ResultToCBTM A.vb i) := by
+          simpa [hc0] using hr
+        rcases Finset.mem_image.mp hr' with ⟨r0, hr0, hf⟩
+        rw [← hf]
         exact A.h_projection_constraint q s.1 i (mem_alphabet_NTM2 A s.1) hvb0 r0 hr0
     · have hc1 : ¬ (s.1 ∈ A.alphabet ∧ F4.im s = A.vb i) := by
         intro h
@@ -547,8 +571,10 @@ def NTM2.toCBTM (A : NTM2) : CBTM :=
     dsimp at hr
     by_cases hvb : F4.im s = A.vb i
     · have hc0 : s.1 ∈ A.alphabet ∧ F4.im s = A.vb i := ⟨mem_alphabet_NTM2 A s.1, hvb⟩
-      rw [dif_pos hc0] at hr
-      rcases Finset.mem_image.mp hr with ⟨r0, hr0, rfl⟩
+      have hr' : r ∈ (A.transition (q, s.1, i)).image (ntm2ResultToCBTM A.vb i) := by
+        simpa [hc0] using hr
+      rcases Finset.mem_image.mp hr' with ⟨r0, hr0, hf⟩
+      rw [← hf]
       exact A.h_transition_state_mem q s.1 i (mem_alphabet_NTM2 A s.1) r0 hr0
     · have hc1 : ¬ (s.1 ∈ A.alphabet ∧ F4.im s = A.vb i) := by
         intro h
@@ -576,199 +602,8 @@ def NTM2.toCBTM (A : NTM2) : CBTM :=
 
 -- ===========================================================================
 -- CBTM → NTM2（反向：虚部由外部 vb 带提供）
--- ===========================================================================
 
-/-- CBTM 转移结果 → NTM2 结果（取实部）。 -/
-def cbtmResultToNTM2 (r : CBTMTransResult) : ℕ × Bool × Dir :=
-  (r.nextState, r.writeSym.1, r.moveDir)
 
-/-- 恒等嵌入在写实部上是单射。 -/
-lemma cbtmResultToNTM2_injective : Function.Injective cbtmResultToNTM2 := by
-  intro r1 r2 h
-  rcases r1 with ⟨n1, w1, d1⟩
-  rcases r2 with ⟨n2, w2, d2⟩
-  simp [cbtmResultToNTM2] at h
-  exact h
 
-/-- CBTM → NTM2 的转移函数（读实部 + vb 带定虚部）。 -/
-def CBTM.toNTM2Trans (M : CBTM) (vb : ℤ → Bool) : ℕ × Bool × ℤ → Finset (ℕ × Bool × Dir) :=
-  fun (q, b, i) =>
-    (M.transition (q, (b, vb i), i)).image cbtmResultToNTM2
-
-/-- CBTM → NTM2：需字母表为全集 + 唯一接受/拒绝态；虚部带由 vb 提供。 -/
-def CBTM.toNTM2 (M : CBTM) (vb : ℤ → Bool)
-    (h_alphabet : M.alphabet = {F4.zero, F4.one, F4.alpha, F4.beta})
-    (h_accept_single : M.acceptStates.card = 1)
-    (h_reject_single : M.rejectStates.card = 1) : NTM2 :=
-{
-  states := M.states
-  startState := M.startState
-  acceptStates := M.acceptStates
-  rejectStates := M.rejectStates
-  alphabet := {false, true}
-  transition := CBTM.toNTM2Trans M vb
-  blankSym := M.blankSym.1
-  h_blank_in_alphabet := by
-    cases M.blankSym.1 <;> decide
-  h_start_in_states := M.h_start_in_states
-  h_accept_subset := M.h_accept_subset
-  h_reject_subset := M.h_reject_subset
-  h_accept_reject_disjoint := M.h_accept_reject_disjoint
-  vb := vb
-  h_branch_axiom := by
-    intro q b i hb
-    unfold CBTM.toNTM2Trans
-    have hmem : (b, vb i) ∈ M.alphabet := by
-      rw [h_alphabet]
-      cases b <;> cases h : vb i <;> simp [F4.zero, F4.one, F4.alpha, F4.beta, h]
-    have hsrc := M.h_branch_axiom q (b, vb i) i hmem
-    by_cases hvi : vb i
-    · have hcard2 : (M.transition (q, (b, vb i), i)).card = 2 := by
-        rw [show F4.im (b, vb i) = true from by simp [hvi]] at hsrc
-        exact hsrc
-      rw [Finset.card_image_of_injective (M.transition (q, (b, vb i), i)) cbtmResultToNTM2_injective]
-      simp [hvi, hcard2]
-    · have hvi0 : vb i = false := by
-        cases h : vb i <;> simp [h] at hvi ⊢
-      have hcard1 : (M.transition (q, (b, vb i), i)).card = 1 := by
-        rw [show F4.im (b, vb i) = false from by simp [hvi0]] at hsrc
-        exact hsrc
-      rw [Finset.card_image_of_injective (M.transition (q, (b, vb i), i)) cbtmResultToNTM2_injective]
-      simp [hvi0, hcard1]
-  h_accept_singleton := h_accept_single
-  h_reject_singleton := h_reject_single
-  h_alphabet_all := rfl
-  h_transition_state_mem := by
-    intro q b i hb r hr
-    unfold CBTM.toNTM2Trans at hr
-    rcases Finset.mem_image.mp hr with ⟨r0, hr0, rfl⟩
-    have hmem : (b, vb i) ∈ M.alphabet := by
-      rw [h_alphabet]
-      cases b <;> cases h : vb i <;> simp [F4.zero, F4.one, F4.alpha, F4.beta, h]
-    exact M.isValid q (b, vb i) i hmem r0 hr0
-  h_projection_constraint := by
-    intro q b i hb hvi0 r hr
-    unfold CBTM.toNTM2Trans at hr
-    rcases Finset.mem_image.mp hr with ⟨r0, hr0, rfl⟩
-    have hmem : (b, vb i) ∈ M.alphabet := by
-      rw [h_alphabet]
-      cases b <;> cases h : vb i <;> simp [F4.zero, F4.one, F4.alpha, F4.beta, h]
-    have him_false : F4.im (b, vb i) = false := by
-      simp [hvi0]
-    have hwrite := (M.h_projection_constraint q (b, vb i) i hmem him_false).2 r0 hr0
-    -- 写回位置 i + r0.moveDir.toInt 的虚部 = r0.writeSym 的虚部（由 vb 一致性保证）
-    -- 这里需要额外假设:虚部带一致性(写符号虚部 = vb[写回位置])。作为结构约束,使用投影:
-    -- 简化:非分支位置的读 → 写符号虚部 false → vb[写回位置] = false 由一致写保证。
-    sorry
-}
-
--- ===========================================================================
--- 结构同构关系：NTM2 ↔ CBTM（恒等嵌入，虚部 = vb 带）
--- ===========================================================================
-
-/-- NTM2 与 CBTM 的结构同构：同一状态/起止/接受/拒绝 + 符号恒等 + 转移对应（虚部一致时）。 -/
-structure StructIsoNTM2CBTM (A : NTM2) (M : CBTM) : Type where
-  h_states_eq : M.states = A.states
-  h_start : M.startState = A.startState
-  h_accept : M.acceptStates = A.acceptStates
-  h_reject : M.rejectStates = A.rejectStates
-  φ_symbol : Equiv F4 { s : F4 // s ∈ M.alphabet }
-  h_φ_id : ∀ s : F4, (φ_symbol s).val = s
-  h_blank : M.blankSym = (A.blankSym, A.vb 0)
-  h_transition : ∀ (q : ℕ) (s : F4) (i : ℤ), F4.im s = A.vb i →
-    M.transition (q, (φ_symbol s).val, i) =
-      (A.transition (q, s.1, i)).image (fun r : ℕ × Bool × Dir =>
-        CBTMTransResult.mk r.1 (r.2.1, A.vb (i + r.2.2.toInt)) r.2.2)
-
-/-- 字母表为全集时的恒等嵌入。 -/
-def alphabetSubtypeEquiv (M : CBTM) (h_alphabet : M.alphabet = {F4.zero, F4.one, F4.alpha, F4.beta}) :
-    Equiv F4 { s : F4 // s ∈ M.alphabet } := {
-  toFun := fun s => ⟨s, by
-    rw [h_alphabet]
-    rcases s with ⟨r, i⟩ <;> cases r <;> cases i <;>
-      simp [F4.zero, F4.one, F4.alpha, F4.beta]⟩
-  invFun := fun s => s.1
-  left_inv := by intro s; rfl
-  right_inv := by
-    intro s
-    rcases s with ⟨val, prop⟩
-    apply Subtype.ext
-    rfl
-}
-
-/-- 方向 1：每个 NTM2 都同构于某个 CBTM（无条件，恒等嵌入）。 -/
-theorem exists_CBTM_iso_NTM2 (A : NTM2) :
-    ∃ M : CBTM, Nonempty (StructIsoNTM2CBTM A M) := by
-  let M := NTM2.toCBTM A
-  let φ_symbol : Equiv F4 { s : F4 // s ∈ M.alphabet } := {
-    toFun := fun s => ⟨s, by
-      rcases s with ⟨r, i⟩ <;> cases r <;> cases i <;>
-        simp [M, NTM2.toCBTM, F4.zero, F4.one, F4.alpha, F4.beta]⟩
-    invFun := fun s => s.1
-    left_inv := by intro s; rfl
-    right_inv := by
-      intro s
-      rcases s with ⟨val, prop⟩
-      apply Subtype.ext
-      rfl
-  }
-  refine ⟨M, ⟨{
-    h_states_eq := rfl
-    h_start := rfl
-    h_accept := rfl
-    h_reject := rfl
-    φ_symbol := φ_symbol
-    h_φ_id := by intro s; rfl
-    h_blank := rfl
-    h_transition := by
-      intro q s i hvb
-      have hφ : ((φ_symbol s).val) = s := rfl
-      rw [hφ]
-      unfold M
-      rw [toCBTM_transition]
-      exact toCBTMTrans_eq_of_consistent A q s i hvb
-  }⟩⟩
-
-/-- 方向 2：字母表为全集 + 唯一接受/拒绝态 + 一致写虚部的 CBTM 同构于某个 NTM2。 -/
-theorem exists_NTM2_iso_CBTM (M : CBTM) (vb : ℤ → Bool)
-    (h_alphabet : M.alphabet = {F4.zero, F4.one, F4.alpha, F4.beta})
-    (h_write_vb : ∀ q b i, b ∈ ({false, true} : Finset Bool) → vb i = false →
-      ∀ r ∈ M.transition (q, (b, vb i), i), F4.im r.writeSym = vb (i + r.moveDir.toInt))
-    (h_accept_single : M.acceptStates.card = 1)
-    (h_reject_single : M.rejectStates.card = 1) :
-    ∃ A : NTM2, Nonempty (StructIsoNTM2CBTM A M) := by
-  let A := CBTM.toNTM2 M vb h_alphabet h_accept_single h_reject_single
-  let φ_symbol : Equiv F4 { s : F4 // s ∈ M.alphabet } := alphabetSubtypeEquiv M h_alphabet
-  refine ⟨A, ⟨{
-    h_states_eq := rfl
-    h_start := rfl
-    h_accept := rfl
-    h_reject := rfl
-    φ_symbol := φ_symbol
-    h_φ_id := by intro s; rfl
-    h_blank := rfl
-    h_transition := by
-      intro q s i hvb
-      have hφ : ((φ_symbol s).val) = s := rfl
-      rw [hφ]
-      have hcomp : (fun r : CBTMTransResult => CBTMTransResult.mk r.nextState (r.writeSym.1, A.vb (i + r.moveDir.toInt)) r.moveDir) ∘
-          cbtmResultToNTM2 = id := by
-        funext r
-        -- 需要写符号虚部 = vb[写回位置](一致写假设)
-        sorry
-      sorry
-  }⟩⟩
-
--- ======================================================================
--- 输入虚部计数（上移自 SubsetSumReal：Core/编译层/下界层共用）
--- ======================================================================
-/-- 输入中虚部为 true 的符号数。 -/
-def imTrueCount (w : List F4) : ℕ :=
-  (w.filter (fun s => F4.im s)).length
-
-lemma imTrueCount_append (w₁ w₂ : List F4) :
-    imTrueCount (w₁ ++ w₂) = imTrueCount w₁ + imTrueCount w₂ := by
-  unfold imTrueCount
-  rw [List.filter_append, List.length_append]
 
 end PvsNP
