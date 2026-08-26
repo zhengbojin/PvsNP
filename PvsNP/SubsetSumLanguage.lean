@@ -66,6 +66,10 @@ lemma natToBinaryF4Real_im_false (n : ℕ) :
   rcases List.mem_map.mp hs with ⟨b, hb, rfl⟩
   simp [boolToF4]
 
+/-- 实部投影：F4 编码 → Bool 串（NTM2 的输入；虚部与语言无关，只与计算模型有关）。 -/
+def encodeSubsetSumBits (inst : SubsetSumInstance) : List Bool :=
+  List.map F4.re (encodeSubsetSumF4Real inst)
+
 lemma imTrueCount_natToBinaryF4Real (n : ℕ) :
     imTrueCount (natToBinaryF4Real n) = 0 := by
   unfold imTrueCount
