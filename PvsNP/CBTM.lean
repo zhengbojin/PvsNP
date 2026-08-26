@@ -666,9 +666,9 @@ def alphabetSubtypeEquiv (M : CBTM) (h_alphabet : M.alphabet = {F4.zero, F4.one,
     rfl
 }
 
-/-- 方向 1：每个 NTM2 都同构于某个 CBTM（无条件，恒等嵌入）。 -/
+/-- 方向 1：每个 NTM2 都同构于某个 CBTM（无条件，恒等嵌入；M = NTM2.toCBTM A）。 -/
 theorem exists_CBTM_iso_NTM2 (A : NTM2) :
-    ∃ M : CBTM, Nonempty (StructIsoNTM2CBTM A M) := by
+    ∃ M : CBTM, M = NTM2.toCBTM A ∧ Nonempty (StructIsoNTM2CBTM A M) := by
   let M := NTM2.toCBTM A
   let φ_symbol : Equiv F4 { s : F4 // s ∈ M.alphabet } := {
     toFun := fun s => ⟨s, by
@@ -682,7 +682,7 @@ theorem exists_CBTM_iso_NTM2 (A : NTM2) :
       apply Subtype.ext
       rfl
   }
-  refine ⟨M, ⟨{
+  refine ⟨M, rfl, ⟨{
     h_states_eq := rfl
     h_start := rfl
     h_accept := rfl

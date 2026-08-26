@@ -362,5 +362,18 @@ inductive TapeReachablePathNTM2 (A : NTM2) (input : List Bool) :
 def NTM2.acceptsTape (A : NTM2) (x : List Bool) : Prop :=
   ∃ π, ∃ cfg : NTM2Config A x, TapeReachablePathNTM2 A x π cfg ∧ cfg.state ∈ A.acceptStates
 
+/-- 规范 NTM2：任意可达路径的磁头只在输入区内活动（每步的步前与步后位置均在 [0, len)），
+    且每个输入格至多被读一次（「只能读一遍输入」）。
+    vb 带只在输入区内有意义；空白区 vbAt 的取值不影响规范机器的行为，
+    因此空白一致性（BlankVbConsistent）不再是同构桥的前提。 -/
+def NTM2.Canonical (A : NTM2) : Prop :=
+  ∀ (x : List Bool) (π : NTM2ComputationPath) (cfg : NTM2Config A x),
+    TapeReachablePathNTM2 A x π cfg →
+      (∀ step ∈ π,
+        0 ≤ step.pos ∧ step.pos < x.length ∧
+        0 ≤ step.pos + step.result.2.2.toInt ∧
+        step.pos + step.result.2.2.toInt < x.length) ∧
+      (π.map (fun step => step.pos)).Nodup
+
 
 end PvsNP

@@ -5,27 +5,31 @@ Authors: Bojin Zheng, Jingwen Zheng
 -/
 
 import PvsNP.ClassicalFramework
+import PvsNP.ClassicalComplexity
 import PvsNP.SubsetSumLanguage
 import PvsNP._A2Bridge
 
 /-!
 # 子集和 ∈ NP_F（公理版：NTM2 求解公理）
 
-按 Spec.md 约定的公理方案（位置模型 V3，Bool 输入）：
-- 主公理 `exists_NTM2_solves_subsetSum`：存在一台 NTM2，
+按 Spec.md 约定的公理方案（位置模型 V4，Bool 输入 + 规范 NTM2）：
+- 主公理 `exists_NTM2_solves_subsetSum`：存在一台规范 NTM2，
   输入 = Bool 串（与经典 P/NP 语言相同；虚部与语言无关，只与计算模型有关）。
   四条款：
   1. 求解条款：对每个非空实例，子集和成立 ⟺ 该 NTM2 有一条磁带语义的接受路径，
      且分叉次数（vb = 1 的位置数）恰为元素个数。
   2. 语言桥条款：NTM2 输入（实部串）经 vb 带复合后 = 语言的 F4 编码
      （复合串 = encodeSubsetSumF4Real inst）。
-  3. 空白一致性条款：输入区之外 vb 带为常数（与 CBTM 常数空白符号对齐）。
+  3. 规范条款：NTM2 是规范的（任意可达路径的磁头只在输入区内活动，
+     且每格至多读一次 —— 「只能读一遍输入」；空白区 vbAt 取值不影响行为，
+     空白一致性不再是前提）。
   4. 语言识别条款：toCBTM A 恰好识别子集和语言（∀ w 的行为；
      由「不能提升」的投影约束，∀ w 行为必须公理化）。
 - 同构桥公理 `NTM2_solve_implies_IsNP_F` 由语言识别条款消去为 theorem
   （A2 消去：`StructIsoNTM2CBTM` + `exists_CBTM_iso_NTM2` + `StructIso_preserves_accepts`
   已就位；语言识别条款直接给出 IsNP_F 的 witness）。
 - `subsetSum_in_NP_F` 由公理组装（theorem），供 FinalProof 使用。
+- `subsetSum_in_NP`：Bool 层（压平）——语言识别定理（实部投影）给出 IsNP_Bool 的 witness。
 -/
 
 namespace PvsNP
@@ -37,10 +41,10 @@ open IVM
 def ntm2ForkCount (A : NTM2) (π : NTM2ComputationPath) : ℕ :=
   (π.filter (fun step => A.vbAt step.pos)).length
 
-/-- [公理 V3] 存在 NTM2 求解子集和（输入 = Bool 串；vb 由转移派生，只与输入模式对应）。
+/-- [公理 V4] 存在规范 NTM2 求解子集和（输入 = Bool 串；vb 由转移派生，只与输入模式对应）。
     条款 1：求解（接受 ⟺ 子集和成立，分叉次数 = 元素个数）。
     条款 2：语言桥（实部输入经 vb 复合 = 语言 F4 编码）。
-    条款 3：空白一致性（输入区之外 vb 为常数）。
+    条款 3：规范（磁头只在输入区内活动，每格至多读一次 —— 机器性质，与输入无关）。
     条款 4：语言识别（toCBTM A 恰好识别子集和语言）。 -/
 axiom exists_NTM2_solves_subsetSum :
   ∃ A : NTM2,
@@ -52,8 +56,7 @@ axiom exists_NTM2_solves_subsetSum :
           ntm2ForkCount A π = inst.elements.length)) ∧
     (∀ inst : SubsetSumInstance, inst.elements ≠ [] →
       ntm2InputToCBTM A (encodeSubsetSumBits inst) = encodeSubsetSumF4Real inst) ∧
-    (∀ inst : SubsetSumInstance, inst.elements ≠ [] →
-      BlankVbConsistent A (encodeSubsetSumBits inst)) ∧
+    NTM2.Canonical A ∧
     (∀ w : List F4, (NTM2.toCBTM A).tapeAccepts w ↔ subsetSumLanguageF4Real w)
 
 /-- [定理（A2 消去）] CBTM ≅ NTM2 的同构桥：NTM2 求解 ⇒ IsNP_F。
@@ -70,16 +73,22 @@ theorem NTM2_solve_implies_IsNP_F :
           ntm2ForkCount A π = inst.elements.length)) ∧
     (∀ inst : SubsetSumInstance, inst.elements ≠ [] →
       ntm2InputToCBTM A (encodeSubsetSumBits inst) = encodeSubsetSumF4Real inst) ∧
-    (∀ inst : SubsetSumInstance, inst.elements ≠ [] →
-      BlankVbConsistent A (encodeSubsetSumBits inst)) ∧
+    NTM2.Canonical A ∧
     (∀ w : List F4, (NTM2.toCBTM A).tapeAccepts w ↔ subsetSumLanguageF4Real w)) →
   IsNP_F subsetSumLanguageF4Real := by
   intro h
-  rcases h with ⟨A, _hsolve, _hbridge, _hblank, hlang⟩
+  rcases h with ⟨A, _hsolve, _hbridge, _hcan, hlang⟩
   exact ⟨NTM2.toCBTM A, trivial, hlang⟩
 
 /-- 子集和 ∈ NP_F（由公理组装）。 -/
 theorem subsetSum_in_NP_F : IsNP_F subsetSumLanguageF4Real :=
   NTM2_solve_implies_IsNP_F exists_NTM2_solves_subsetSum
+
+/-- 子集和 ∈ NP（Bool 层，压平）——由公理组装：
+    语言识别定理（实部投影）给出 IsNP_Bool 的 witness（规范 NTM2 A 直接判定实部串）。 -/
+theorem subsetSum_in_NP : IsNP_Bool subsetSumBoolLanguage := by
+  rcases exists_NTM2_solves_subsetSum with ⟨A, _hsolve, hbridge, hcan, hlang⟩
+  refine ⟨A, hcan, ?_⟩
+  exact ntm2_language_recognition A hcan hbridge hlang
 
 end PvsNP
