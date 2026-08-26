@@ -1,0 +1,7 @@
+/.lake
+/archive
+
+*.log
+*.txt
+*.py
+*.sh

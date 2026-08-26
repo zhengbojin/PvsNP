@@ -91,4 +91,42 @@ theorem subsetSum_in_NP : IsNP_Bool subsetSumBoolLanguage := by
   refine ⟨A, hcan, ?_⟩
   exact ntm2_language_recognition A hcan hbridge hlang
 
+/-- 子集和 F4 语言 = 复合提升（规范 NTM2 的 vb 带逐格复合；语言桥条款）。
+    「NP_f 和 NP 所对应的语言是相同的」：F4 语言 = 实部语言的复合呈现，
+    虚部（vb 带）是计算模型层的标记，与语言内容无关。 -/
+theorem subsetSumLanguageF4Real_eq_lift (A : NTM2)
+    (hbridge : ∀ inst : SubsetSumInstance, inst.elements ≠ [] →
+      ntm2InputToCBTM A (encodeSubsetSumBits inst) = encodeSubsetSumF4Real inst) :
+    subsetSumLanguageF4Real = liftLanguage A subsetSumBoolLanguage := by
+  funext w
+  apply propext
+  constructor
+  · intro h
+    rcases h with ⟨inst, hw, hne, hholds⟩
+    refine ⟨encodeSubsetSumBits inst, ?_, ?_⟩
+    · rw [hbridge inst hne]
+      exact hw
+    · exact ⟨inst, rfl, hne, hholds⟩
+  · intro h
+    rcases h with ⟨x, hw, hx⟩
+    rcases hx with ⟨inst, hx', hne, hholds⟩
+    refine ⟨inst, ?_, hne, hholds⟩
+    calc
+      w = ntm2InputToCBTM A x := hw
+      _ = ntm2InputToCBTM A (encodeSubsetSumBits inst) := by rw [hx']
+      _ = encodeSubsetSumF4Real inst := hbridge inst hne
+
+/-- 集合论层面的 NP 方向链条（子集和实例）：
+    F4 语言 = 复合提升（语言桥条款）→ 实部投影 = Bool 语言（投影-提升互逆）
+    → 投影语言 ∈ NP（规范 NTM2 直接判定）。
+    「每一个 NP_f 语言投影得到的语言 ∈ NP」在此实例化。 -/
+theorem subsetSum_NP_chain :
+    projectLanguage subsetSumLanguageF4Real = subsetSumBoolLanguage ∧
+    IsNP_Bool subsetSumBoolLanguage := by
+  rcases exists_NTM2_solves_subsetSum with ⟨A, _hsolve, hbridge, _hcan, _hlang⟩
+  constructor
+  · rw [subsetSumLanguageF4Real_eq_lift A hbridge]
+    exact projectLanguage_liftLanguage A subsetSumBoolLanguage
+  · exact subsetSum_in_NP
+
 end PvsNP

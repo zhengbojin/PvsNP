@@ -87,6 +87,51 @@ lemma realProject_encodeSubsetSumF4Real (inst : SubsetSumInstance) :
   rfl
 
 -- ======================================================================
+-- 语言层的投影与提升（集合论映射：F4 语言 ↔ Bool 语言）
+-- ======================================================================
+
+/-- 语言投影：F4 语言 → Bool 语言（实部投影；虚部与语言无关，只与计算模型有关）。 -/
+def projectLanguage (L : FLanguage) : BoolLanguage := fun x =>
+  ∃ w, realProject w = x ∧ L w
+
+/-- 复合提升：Bool 语言 → F4 语言（按规范 NTM2 的 vb 带逐格复合；
+    虚部 = 位置函数，与输入内容无关 —— 「标记移到计算模型层」）。 -/
+def liftLanguage (A : NTM2) (K : BoolLanguage) : FLanguage := fun w =>
+  ∃ x, w = ntm2InputToCBTM A x ∧ K x
+
+/-- 无标记提升：Bool 语言 → F4 语言（虚部全 false；受限机器（不分支）的语言呈现）。 -/
+def embedUpLanguage (K : BoolLanguage) : FLanguage := fun w =>
+  ∃ x, w = embedBool x ∧ K x
+
+/-- 投影-提升互逆：复合语言的实部投影 = 原 Bool 语言（逐格取实部）。 -/
+lemma projectLanguage_liftLanguage (A : NTM2) (K : BoolLanguage) :
+    projectLanguage (liftLanguage A K) = K := by
+  funext x
+  apply propext
+  constructor
+  · intro h
+    rcases h with ⟨w, hproj, hw⟩
+    rcases hw with ⟨x', hw', hK⟩
+    rw [hw'] at hproj
+    have hx' : x' = x := by
+      simpa [realProject_ntm2InputToCBTM A x'] using hproj
+    subst x'
+    exact hK
+  · intro hx
+    refine ⟨ntm2InputToCBTM A x, ?_, ?_⟩
+    · exact realProject_ntm2InputToCBTM A x
+    · exact ⟨x, rfl, hx⟩
+
+/-- P_F 语言的 Bool 呈现 ∈ P（受限机器判定的语言在嵌入输入上 = 同一机器；
+    「P_f 和 P 所对应的语言是相同的」的方向一）。 -/
+theorem P_F_projection_in_P (L : FLanguage) (hP : IsP_F L) :
+    IsP_Bool (fun x => L (embedBool x)) := by
+  rcases hP with ⟨M, hrest, hpoly, hcorrect⟩
+  refine ⟨M, hrest, hpoly, ?_⟩
+  intro x
+  exact hcorrect (embedBool x)
+
+-- ======================================================================
 -- 实部语言识别（Bool 层）：NTM2 的语言 = 复合语言的实部投影
 -- ======================================================================
 
