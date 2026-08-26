@@ -1,0 +1,22 @@
+name = "pvsnp"
+version = "0.1.0"
+keywords = ["math"]
+defaultTargets = ["PvsNP"]
+
+[leanOptions]
+maxErrors = 2000
+linter.style.nativeDecide = false
+pp.unicode.fun = true # pretty-prints `fun a ↦ b`
+relaxedAutoImplicit = false
+weak.linter.mathlibStandardSet = true
+maxSynthPendingDepth = 3
+linter.flexible = false
+maxHeartbeats = 2000000
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.32.2"
+
+[[lean_lib]]
+name = "PvsNP"
