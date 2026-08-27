@@ -126,7 +126,7 @@ theorem toCBTM_polynomialTime (A : NTM2) (hcan : NTM2.Canonical A)
       have hbridge' : ntm2InputToCBTM A (encodeSubsetSumBits inst) = w := by
         rw [hbridge inst hne]
         exact hw.symm
-      subst w
+      subst hbridge'
       -- 复合串上的接受路径与 NTM2 路径同长（同构桥）
       rcases exists_CBTM_iso_NTM2 A with ⟨M, hM, ⟨iso⟩⟩
       subst M
