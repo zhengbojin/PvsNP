@@ -7,7 +7,7 @@ Authors: Bojin Zheng, Jingwen Zheng
 import PvsNP.ClassicalFramework
 import PvsNP.ClassicalComplexity
 import PvsNP.SubsetSumLanguage
-import PvsNP._A2Bridge
+import PvsNP.A2Bridge
 
 /-!
 # 子集和 ∈ NP_F（公理版：NTM2 求解公理）

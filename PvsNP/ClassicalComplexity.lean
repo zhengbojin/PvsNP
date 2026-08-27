@@ -6,7 +6,7 @@ Authors: Bojin Zheng, Jingwen Zheng
 
 import PvsNP.ClassicalFramework
 import PvsNP.SubsetSumLanguage
-import PvsNP._A2Bridge
+import PvsNP.A2Bridge
 
 set_option linter.style.header false
 set_option linter.style.longLine false
