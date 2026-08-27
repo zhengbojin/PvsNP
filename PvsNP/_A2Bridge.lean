@@ -8,6 +8,20 @@ import PvsNP.Basic
 import PvsNP.CBTM
 import PvsNP.IVM
 
+
+set_option linter.style.header false
+set_option linter.style.longLine false
+set_option linter.unusedSimpArgs false
+set_option linter.unnecessarySimpa false
+set_option linter.unnecessarySeqFocus false
+set_option linter.constructorNameAsVariable false
+set_option linter.unusedVariables false
+set_option linter.style.nativeDecide false
+set_option linter.unusedTactic false
+set_option linter.unreachableTactic false
+set_option linter.style.multiGoal false
+set_option linter.style.whitespace false
+
 namespace PvsNP
 
 open CBTM
@@ -50,6 +64,56 @@ lemma iso_initial_corresp (A : NTM2) (M : CBTM) (iso : StructIsoNTM2CBTM A M) (x
 lemma int_toNat_lt_of_lt (i : ℤ) (n : ℕ) (h0 : 0 ≤ i) (hlt : i < (n : ℤ)) :
     i.toNat < n := by
   exact (Int.toNat_lt (n := n) h0).mpr hlt
+
+/-- Int.toNat 在非负整数上单射。 -/
+lemma int_toNat_inj_nonneg {a b : ℤ} (ha : 0 ≤ a) (hb : 0 ≤ b) :
+    a.toNat = b.toNat → a = b := by
+  intro h
+  have hz : (a.toNat : ℤ) = (b.toNat : ℤ) := congrArg (fun n : ℕ => (n : ℤ)) h
+  rw [Int.toNat_of_nonneg ha] at hz
+  rw [Int.toNat_of_nonneg hb] at hz
+  exact hz
+
+/-- 互异的自然数列表，元素都 < n → 长度 ≤ n（鸽巢：n 个候选位置，互异元素至多 n 个）。 -/
+lemma nat_nodup_lt_length_le (l : List ℕ) (n : ℕ)
+    (hnodup : l.Nodup) (hlt : ∀ q ∈ l, q < n) : l.length ≤ n := by
+  have hcard : l.toFinset.card = l.length := List.toFinset_card_of_nodup hnodup
+  rw [← hcard]
+  have hle : l.toFinset.card ≤ (Finset.range n).card := Finset.card_le_card (by
+    intro q hq
+    rw [Finset.mem_range]
+    exact hlt q (List.mem_toFinset.mp hq))
+  rwa [Finset.card_range] at hle
+
+/-- 互异的非负整数列表，元素都 < n → 长度 ≤ n。 -/
+lemma int_nodup_bounded_length (l : List ℤ) (n : ℕ)
+    (hnodup : l.Nodup) (h0 : ∀ p ∈ l, 0 ≤ p) (hlt : ∀ p ∈ l, p < n) :
+    l.length ≤ n := by
+  have hmap_nodup : (l.map Int.toNat).Nodup := by
+    apply List.Nodup.map_on
+    · intro a ha b hb h
+      exact int_toNat_inj_nonneg (h0 a ha) (h0 b hb) h
+    · exact hnodup
+  have hmap_lt : ∀ q ∈ l.map Int.toNat, q < n := by
+    intro q hq
+    rcases List.mem_map.mp hq with ⟨p, hp, rfl⟩
+    exact (Int.toNat_lt (n := n) (h0 p hp)).mpr (hlt p hp)
+  have hlen : (l.map Int.toNat).length = l.length := by simp
+  rw [← hlen]
+  exact nat_nodup_lt_length_le (l.map Int.toNat) n hmap_nodup hmap_lt
+
+/-- 规范 NTM2 的任意可达路径长度 ≤ 输入长度：位置互异（Nodup）且都在输入区内，
+    「每格至多读一次」→ 步数 ≤ 格数（线性界）。 -/
+lemma canonical_path_length_le (A : NTM2) (hcan : NTM2.Canonical A)
+    (x : List Bool) (π : NTM2ComputationPath) (cfg : NTM2Config A x) :
+    TapeReachablePathNTM2 A x π cfg → π.length ≤ x.length := by
+  intro hr
+  rcases hcan x π cfg hr with ⟨hb, hnodup⟩
+  have hlen : π.length = (π.map (fun s => s.pos)).length := by simp
+  rw [hlen]
+  exact int_nodup_bounded_length (π.map (fun s => s.pos)) x.length hnodup
+    (by intro p hp; rcases List.mem_map.mp hp with ⟨s, hs, rfl⟩; exact (hb s hs).1)
+    (by intro p hp; rcases List.mem_map.mp hp with ⟨s, hs, rfl⟩; exact (hb s hs).2.1)
 
 /-- 空路径的可达配置唯一：nil 路径的终配置 = 初始配置。 -/
 lemma reach_cfg_of_len_zero (A : NTM2) (x : List Bool) :
@@ -173,17 +237,19 @@ lemma iso_path_backward (A : NTM2) (M : CBTM) (iso : StructIsoNTM2CBTM A M) (x :
       TapeReachablePath M (ntm2InputToCBTM A x) π cfg →
       ∃ π' : NTM2ComputationPath, ∃ cfg' : NTM2Config A x,
         TapeReachablePathNTM2 A x π' cfg' ∧ cfg = ntm2CfgToCBTM A M iso cfg' ∧
+        π.length = π'.length ∧
         (cfg'.headPos < (x.length : ℤ) ∨ π'.length = 0) ∧ 0 ≤ cfg'.headPos := by
   intro π cfg hr
   induction hr with
   | nil =>
-      refine ⟨[], NTM2InitialConfig A x, TapeReachablePathNTM2.nil, ?_, ?_, ?_⟩
+      refine ⟨[], NTM2InitialConfig A x, TapeReachablePathNTM2.nil, ?_, ?_, ?_, ?_⟩
       · exact (iso_initial_corresp A M iso x).symm
+      · rfl
       · exact Or.inr rfl
       · dsimp [NTM2InitialConfig]
         omega
   | cons π₀ step cfg₀ hrc hfrom hread htrans ih =>
-      rcases ih with ⟨π', cfg', hrc', hcfg', hlt, hnonneg⟩
+      rcases ih with ⟨π', cfg', hrc', hcfg', hlen, hlt, hnonneg⟩
       let s₀ : F4 := cfg₀.tapeAt cfg₀.headPos
       have hhead_eq : cfg₀.headPos = cfg'.headPos := by
         rw [hcfg']
@@ -256,7 +322,7 @@ lemma iso_path_backward (A : NTM2) (M : CBTM) (iso : StructIsoNTM2CBTM A M) (x :
         rw [hcfg''head]
         exact hstep0_after
       refine ⟨π' ++ [step₀], NTM2StepConfig cfg' r₀,
-        TapeReachablePathNTM2.cons π' step₀ cfg' hrc' hfrom₀ hread₀ hpos₀ htrans₀, ?_, ?_, ?_⟩
+        TapeReachablePathNTM2.cons π' step₀ cfg' hrc' hfrom₀ hread₀ hpos₀ htrans₀, ?_, ?_, ?_, ?_⟩
       · rw [hcfg']
         dsimp [ntm2CfgToCBTM]
         rw [← hres]
@@ -269,6 +335,8 @@ lemma iso_path_backward (A : NTM2) (M : CBTM) (iso : StructIsoNTM2CBTM A M) (x :
           exact him_s0.symm
         rw [hvb']
         exact (iso_step_config A M iso cfg' r₀).symm
+      · -- π.length = (π' ++ [step₀]).length（cons 分支：π = π₀ ++ [step]，ih 同长）
+        simp [hlen]
       · exact Or.inl hnew_lt
       · exact hnew_ge
 
@@ -287,7 +355,7 @@ theorem StructIso_preserves_accepts (A : NTM2) (M : CBTM) (iso : StructIsoNTM2CB
     rw [iso.h_accept]
     exact hacc
   · intro ⟨π, cfg, hr, hacc⟩
-    rcases (iso_path_backward A M iso x hcan π cfg hr) with ⟨π', cfg', hrc', hcfg', _hlt, _hnonneg⟩
+    rcases (iso_path_backward A M iso x hcan π cfg hr) with ⟨π', cfg', hrc', hcfg', _hlen, _hlt, _hnonneg⟩
     refine ⟨π', cfg', hrc', ?_⟩
     rw [iso.h_accept] at hacc
     rw [hcfg'] at hacc

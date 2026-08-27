@@ -154,8 +154,13 @@ structure CBTM.IsRestricted (M : CBTM) : Prop where
   h_card_one : ∀ q s i, s ∈ M.alphabet → (M.transition (q, s, i)).card = 1
   h_blank_in_alphabet : M.blankSym ∈ M.alphabet
 
-/-- 占位：CBTM 的多项式时间性质（运行时间尚未形式化）。 -/
-def CBTM.isPolynomialTime (_M : CBTM) : Prop := True
+/-- 多项式界：存在 k，∀ n，p n ≤ n^k + k（标准多项式形态，足够宽松）。
+    CBTM 的多项式时间：存在多项式界 p，任意接受路径长度 ≤ p(输入长度)。
+    实化定义（替换旧占位 `= True`）；依赖磁带语义（TapeReachablePath，IVM），
+    定义于 PvsNP.IVM；此处仅保留多项式界谓词。 -/
+def IsPolynomialBound (p : ℕ → ℕ) : Prop :=
+  ∃ k : ℕ, ∀ n : ℕ, p n ≤ n ^ k + k
+
 
 -- ===========================================================================
 -- 辅助：基数 1 的有限集恰有唯一元素

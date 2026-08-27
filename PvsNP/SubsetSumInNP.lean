@@ -102,13 +102,59 @@ theorem subsetSumLanguageF4Real_eq_lift (A : NTM2)
       _ = ntm2InputToCBTM A (encodeSubsetSumBits inst) := by rw [hx']
       _ = encodeSubsetSumF4Real inst := hbridge inst hne
 
+/-- toCBTM A 是多项式时间的（线性界）：接受路径只存在于编码串上（条款 4），
+    编码串 = 复合串（条款 2 语言桥），复合串上的路径与 NTM2 路径同长（同构桥），
+    规范（Canonical）给出路径长度 ≤ 输入长度 —— 「每格至多读一次」的线性时间上界。 -/
+theorem toCBTM_polynomialTime (A : NTM2) (hcan : NTM2.Canonical A)
+    (hbridge : ∀ inst : SubsetSumInstance, inst.elements ≠ [] →
+      ntm2InputToCBTM A (encodeSubsetSumBits inst) = encodeSubsetSumF4Real inst)
+    (hreject : ∀ w : List F4,
+      (∀ inst : SubsetSumInstance, inst.elements ≠ [] → w ≠ encodeSubsetSumF4Real inst) →
+      ¬ (NTM2.toCBTM A).tapeAccepts w) :
+    CBTM.isPolynomialTime (NTM2.toCBTM A) := by
+  refine ⟨id, ?_, ?_⟩
+  · -- 恒等函数是多项式界：取 k = 1
+    refine ⟨1, ?_⟩
+    intro n
+    simp [IsPolynomialBound]
+  · intro w π cfg hr hacc
+    -- 接受路径给出 tapeAccepts w；由条款 4，w 必为某非空实例的编码串
+    have haccT : (NTM2.toCBTM A).tapeAccepts w := ⟨π, cfg, hr, hacc⟩
+    by_cases h : ∃ inst : SubsetSumInstance, inst.elements ≠ [] ∧ w = encodeSubsetSumF4Real inst
+    · rcases h with ⟨inst, hne, hw⟩
+      -- 编码串 = 复合串（语言桥，反向）；subst 同步替换 w 及其依赖类型（cfg 等）
+      have hbridge' : ntm2InputToCBTM A (encodeSubsetSumBits inst) = w := by
+        rw [hbridge inst hne]
+        exact hw.symm
+      subst w
+      -- 复合串上的接受路径与 NTM2 路径同长（同构桥）
+      rcases exists_CBTM_iso_NTM2 A with ⟨M, hM, ⟨iso⟩⟩
+      subst M
+      have hrM : TapeReachablePath (NTM2.toCBTM A) (ntm2InputToCBTM A (encodeSubsetSumBits inst)) π cfg := by
+        exact hr
+      rcases iso_path_backward A (NTM2.toCBTM A) iso (encodeSubsetSumBits inst) hcan π cfg hrM with
+        ⟨π', cfg', hrc', _hcfg', hlen, _hlt, _hnonneg⟩
+      -- 规范：NTM2 路径长度 ≤ 输入长度（每格至多读一次）
+      have hlen2 : π'.length ≤ (encodeSubsetSumBits inst).length :=
+        canonical_path_length_le A hcan (encodeSubsetSumBits inst) π' cfg' hrc'
+      calc
+        π.length = π'.length := hlen
+        _ ≤ (encodeSubsetSumBits inst).length := hlen2
+        _ = (ntm2InputToCBTM A (encodeSubsetSumBits inst)).length := by simp [ntm2InputToCBTM]
+    · exfalso
+      apply hreject w
+      · intro inst hne hw
+        exact h ⟨inst, hne, hw⟩
+      · exact haccT
+
 /-- 子集和 ∈ NP_F：witness = toCBTM A。
     编码串的行为由条款 1（求解）经同构桥给出（接受 ⟺ holds ⟺ w ∈ L_F4）；
     非编码串的行为由条款 4（非编码拒绝）给出。
-    —— 语言识别（∀ w 恰好识别）由 条款 1 + 条款 2 + 条款 3 + 条款 4 组合推出。 -/
+    —— 语言识别（∀ w 恰好识别）由 条款 1 + 条款 2 + 条款 3 + 条款 4 组合推出。
+    多项式时间（实化 isPolynomialTime）：toCBTM_polynomialTime（线性界，同上）。 -/
 theorem subsetSum_in_NP_F : IsNP_F subsetSumLanguageF4Real := by
   rcases exists_NTM2_solves_subsetSum with ⟨A, hsolve, hbridge, hcan, hreject⟩
-  refine ⟨NTM2.toCBTM A, trivial, ?_⟩
+  refine ⟨NTM2.toCBTM A, toCBTM_polynomialTime A hcan hbridge hreject, ?_⟩
   intro w
   constructor
   · intro hacc

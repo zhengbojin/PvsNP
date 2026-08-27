@@ -43,20 +43,6 @@ def List.toBoolList (w : List F4) : List Bool :=
 def accepts_bool (M : CBTM) (x : List Bool) : Prop :=
   ∃ w : List F4, List.toBoolList w = x ∧ M.accepts w
 
-/-- 多项式时间确定性语言类 P。 -/
-structure IsP (L : Language) : Prop where
-  exists_restricted : ∃ (M : CBTM), CBTM.IsRestricted M ∧ CBTM.isPolynomialTime M ∧
-    (∀ x : List Bool, accepts_bool M x ↔ L x)
-
-/-- 多项式时间非确定性语言类 NP。 -/
-structure IsNP (L : Language) : Prop where
-  exists_verifier : ∃ (M : CBTM), CBTM.isPolynomialTime M ∧
-    (∀ x : List Bool, accepts_bool M x ↔ L x)
-
-/-- 验证器集合。 -/
-def Verifiers (L : Language) : Set CBTM :=
-  { M | CBTM.isPolynomialTime M ∧ (∀ x : List Bool, accepts_bool M x ↔ L x) }
-
 -- ======================================================================
 -- 激活的生成元索引（用于 CBTM 的 kappa_M）
 -- ======================================================================
@@ -169,6 +155,32 @@ inductive TapeReachablePath (M : CBTM) (input : List F4) :
 def CBTM.tapeAccepts (M : CBTM) (input : List F4) : Prop :=
   ∃ π : ComputationPath, ∃ cfg : CBTMConfig M input,
     TapeReachablePath M input π cfg ∧ cfg.state ∈ M.acceptStates
+
+/-- CBTM 的多项式时间（实化定义）：存在多项式界 p，任意接受路径长度 ≤ p(输入长度)。
+    接受路径 = 磁带语义可达路径且末端状态在接受态。 -/
+def CBTM.isPolynomialTime (M : CBTM) : Prop :=
+  ∃ p : ℕ → ℕ, IsPolynomialBound p ∧
+    ∀ (x : List F4) (π : ComputationPath) (cfg : CBTMConfig M x),
+      TapeReachablePath M x π cfg → cfg.state ∈ M.acceptStates →
+      π.length ≤ p x.length
+
+-- ======================================================================
+-- 经典 Bool 语言复杂度类（旧模型：实部投影的接受关系）
+-- ======================================================================
+
+/-- 多项式时间确定性语言类 P。 -/
+structure IsP (L : Language) : Prop where
+  exists_restricted : ∃ (M : CBTM), CBTM.IsRestricted M ∧ CBTM.isPolynomialTime M ∧
+    (∀ x : List Bool, accepts_bool M x ↔ L x)
+
+/-- 多项式时间非确定性语言类 NP。 -/
+structure IsNP (L : Language) : Prop where
+  exists_verifier : ∃ (M : CBTM), CBTM.isPolynomialTime M ∧
+    (∀ x : List Bool, accepts_bool M x ↔ L x)
+
+/-- 验证器集合。 -/
+def Verifiers (L : Language) : Set CBTM :=
+  { M | CBTM.isPolynomialTime M ∧ (∀ x : List Bool, accepts_bool M x ↔ L x) }
 -- ======================================================================
 
 /-- 单次验证的维度：最小接受路径上的激活生成元数（磁带语义）。 -/
