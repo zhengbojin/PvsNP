@@ -72,7 +72,12 @@ grep -rn "^axiom" PvsNP/*.lean      # 1（单公理 exists_NTM2_solves_subsetSum
 
 ## 论文
 
-论文(measure/models/philo/QA2 等)为作者研究成果，另行发布，不随本仓库分发。
+四篇论文 PDF 位于仓库根目录（tex 源文件不随仓库分发）：
+
+- `measure.C.0.7.pdf` — 本质维度与下界
+- `models.C.0.6.pdf` — 计算模型（CBTM/IVM）
+- `philo.C.0.7.pdf` — 数计一体（语义语法同一）
+- `QA2.C.0.6.pdf` — 理念篇
 
 ## 许可
 
