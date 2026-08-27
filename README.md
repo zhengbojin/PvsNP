@@ -57,8 +57,7 @@ PvsNP/
 ├── LowerBound.lean          子集和定义
 └── SubsetSumNTM2.lean       辅助
 report.md                    技术报告（含数学边界完整分析）
-Spec.md                      设计规格
-*.tex                        论文（measure/models/philo/QA2 等）
+Spec.md                      设计规格（仅本地，不随仓库分发）
 ```
 
 ## 构建与验证
@@ -73,10 +72,7 @@ grep -rn "^axiom" PvsNP/*.lean      # 1（单公理 exists_NTM2_solves_subsetSum
 
 ## 论文
 
-- `measure.C.0.7.tex` — 本质维度与下界
-- `models.C.0.6.tex` — 计算模型（CBTM/IVM）
-- `philo.C.0.7.tex` — 数计一体（语义语法同一）
-- `QA2.C.0.6.tex`、`MultiType.C1.2.tex` — 理念篇
+论文(measure/models/philo/QA2 等)为作者研究成果，另行发布，不随本仓库分发。
 
 ## 许可
 
