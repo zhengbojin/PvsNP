@@ -1017,6 +1017,25 @@ theorem subsetSum_not_in_P_F :
 theorem subsetSum_not_in_P_F' : ¬ IsP_F subsetSumLanguageF4Real :=
   subsetSum_not_in_P_F
 
+-- ============================================================================
+-- 编码不单射（语义统一的形式化障碍记录）
+-- ============================================================================
+
+/-- 编码不单射：([1], target=3) 与 ([3], target=1) 的 F4 编码相同 ——
+    变长二进制（Nat.digits，0 = 空串）无长度前缀 + target 区无分隔符，
+    块区与 target 区的边界歧义。
+    含义：Bool 串（实部投影）更不能恢复块结构 —— 「规范提升由串结构读出」不可行，
+    语义统一（虚部由语言结构内建）的严格形式只能是 F4 本质层（编码 = 定义的一部分），
+    不能由 Bool 层派生。语言成员（∃ inst）不受影响（同串多实例无害）。 -/
+theorem encodeSubsetSumF4Real_not_injective :
+    ∃ a b : SubsetSumInstance, a ≠ b ∧ encodeSubsetSumF4Real a = encodeSubsetSumF4Real b := by
+  refine ⟨{elements := [1], target := 3}, {elements := [3], target := 1}, ?_, ?_⟩
+  · intro h
+    have heq : ([1] : List ℕ) = [3] := congrArg SubsetSumInstance.elements h
+    have hhd : ([1] : List ℕ).head? = ([3] : List ℕ).head? := by rw [heq]
+    norm_num at hhd
+  · native_decide
+
 -- 注：subsetSum_in_NP_F 由 PvsNP.SubsetSumInNP 定理化（公理 A1 + 同构桥定理）；
 -- P_F_neq_NP_F 相应组装于 PvsNP.FinalProof。
 

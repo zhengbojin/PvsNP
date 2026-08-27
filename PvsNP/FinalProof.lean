@@ -83,6 +83,32 @@ theorem P_F_neq_NP_F : P_F ≠ NP_F := by
 /-- CBTM（F4）框架内的分离结论（别名）。 -/
 theorem P_cb_neq_NP_cb : P_F ≠ NP_F := P_F_neq_NP_F
 
+-- ======================================================================
+-- 语义统一（数计一体）意义下的真子集：P_F ⊊ NP_F
+-- ======================================================================
+
+/-- 受限机器 ⊆ 全机器：P_F 的语言都是 NP_F 的语言（IsP_F → IsNP_F，丢弃受限分量）。 -/
+theorem IsP_F_imp_IsNP_F (L : FLanguage) (hP : IsP_F L) : IsNP_F L := by
+  rcases hP with ⟨M, _hrest, hpoly, hcorr⟩
+  exact ⟨M, hpoly, hcorr⟩
+
+/-- P_F ⊆ NP_F（子集）。 -/
+theorem P_F_subset_NP_F : P_F ⊆ NP_F := by
+  intro L hL
+  exact IsP_F_imp_IsNP_F L hL
+
+/-- 真子集：P_F ⊆ NP_F 且 P_F ≠ NP_F（语义统一层的分离 —— 虚部内建的语义语法同一形态）。 -/
+theorem P_F_ss_NP_F : P_F ⊆ NP_F ∧ P_F ≠ NP_F := by
+  exact ⟨P_F_subset_NP_F, P_F_neq_NP_F⟩
+
+/-- 语义统一分离：子集和的本质形态（α 编码，虚部内建于语言结构）∈ NP_F ∖ P_F。
+    这是「语义与语法必须统一」的严格落点：复杂度类定义在 F4 本质层
+    （编码 = 定义的一部分），Bool 层是它的实部投影；
+    投影不保持分离（encodeSubsetSumF4Real_not_injective：Bool 串不承载块结构）。 -/
+theorem subsetSum_semantic_unified_separation :
+    IsNP_F subsetSumLanguageF4Real ∧ ¬ IsP_F subsetSumLanguageF4Real := by
+  exact ⟨subsetSum_in_NP_F, subsetSum_not_in_P_F'⟩
+
 -- 综合定理（含障碍无关）
 theorem P_neq_NP_with_barriers :
     P_F ≠ NP_F ∧

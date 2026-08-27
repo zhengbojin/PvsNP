@@ -190,7 +190,10 @@ NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语�
 
 | 结论 | 状态 |
 |---|---|
+| `P_F ⊆ NP_F ∧ P_F ≠ NP_F`（**真子集**，语义统一层） | ✅ 定理（`P_F_ss_NP_F`） |
 | `P_F ≠ NP_F`（F4/虚部语义层分离） | ✅ 定理，全链 0 error 0 sorry |
+| 语义统一分离：子集和本质形态 ∈ NP_F ∖ P_F | ✅ 定理（`subsetSum_semantic_unified_separation`） |
+| 编码不单射（`([1],t=3)` ≡ `([3],t=1)`） | ✅ 定理（`encodeSubsetSumF4Real_not_injective`）——Bool 串不承载块结构的严格证据 |
 | `subsetSum ∈ NP_F`、`subsetSum ∈ NP_Bool` | ✅ 定理（witness 多项式时间：`toCBTM_polynomialTime`，线性界） |
 | `isPolynomialTime` 实化（接受路径 ≤ 多项式界） | ✅ 定义 + witness 证明（不再占位） |
 | 投影-提升互逆、复合提升等式、等价类链条 | ✅ 定理 |
@@ -208,6 +211,15 @@ NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语�
 5. **枚举不可行**："枚举每个 P 的语言逐个排除" = `¬IsP_Bool K` 的直接展开（`∀ L, IsP_F L → π(L) ≠ K`），每个子问题都是同一个开放命题的实例，需要统一下界论证（不存在）。
 
 **结论**：分离发生在虚部语义层（F4）——已严格证明；经典 Bool 层（实部投影）字面分离 ⟺ 经典 P≠NP，开放。这与论文立场一致："直接证明 P≠NP 不可能（经典语境），框架的贡献 = 语义层分离"。
+
+### 7.3 语义统一（数计一体）的严格落点
+
+"语义与语法必须统一"（虚部由语言结构内建，拒绝外部编码约定）在形式化中的形态：
+
+1. **复杂度类定义在 F4 本质层**：编码（α 模式）= 定义的一部分，虚部内建——`P_F ⊊ NP_F`（`P_F_ss_NP_F`：`P_F ⊆ NP_F` + `P_F ≠ NP_F`）**全绿**；
+2. **Bool 层是实部投影**（等价类）：`P_Bool = π(P_F)`、`NP_Bool = π(NP_F)`——投影不保持分离；
+3. **"规范提升由 Bool 串恢复"不可行——有严格反例**：`encodeSubsetSumF4Real_not_injective`——`([1], target=3)` 与 `([3], target=1)` 编码相同（变长二进制无长度前缀 + target 区无分隔符，块区/target 区边界歧义）——Bool 串（α 标记投影后与数据 0 同符）更不能恢复块结构；
+4. 因此**语义统一的 Bool 层分离类定义不存在**（任意 Bool 语言无内建结构；子集和 Bool 串不可解析）——分离的严格形式只能是 F4 层（已证），Bool 层保持经典等价类（开放）。
 
 ---
 
