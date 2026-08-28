@@ -17,6 +17,8 @@ import PvsNP.SubsetSumInNP
 import PvsNP.SubsetSumLanguage
 import PvsNP.PrimeSqrtLinearIndep
 import PvsNP.SubsetSumNTM2
+import PvsNP.ParamEquiv
+import PvsNP.PNPClosure
 
 
 set_option linter.style.header false

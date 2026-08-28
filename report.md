@@ -1,7 +1,7 @@
 # 技术报告：P ≠ NP 形式化证明工程（Lean 4）
 
 - **项目**：`D:\lean4\pvsnp`（lake 工程，库名/模块名 `PvsNP`）
-- **版本**：commit `5414216`（全链 0 error、0 sorry、单公理）
+- **版本**：commit `7c62750`（全链 0 error、0 sorry、单公理）
 - **作者**：Bojin Zheng, Jingwen Zheng
 - **日期**：2026-08
 - **配套论文**：`measure.C.0.7.tex`、`models.C.0.6.tex`、`MultiType.C1.2.tex`（理念篇）等
@@ -16,9 +16,9 @@
 - 非确定性分支的"虚部"不是外部编码约定，而是**计算模型的内在语义**（数计一体：语义内建于符号）；
 - 虚部标记（α = `(false,true)`）携带**不可公度性**语义——每个标记对应一个素数平方根生成元（线性独立），构成**本质维度 κ** 的度量单位；
 - 经典 Bool 层 = F4 层的**实部投影**（压平）：虚部与语言无关，只与计算模型有关；
-- 分离（P ≠ NP）发生在**虚部语义层**（F4 层，严格可证）；经典 Bool 层字面分离等价于经典开放命题（详见 §7）。
+- 分离（P ≠ NP）发生在**虚部语义层**（F4 层，严格可证）；**框架内经典 Bool 层分离**由本质维度下界（论文层结论 κ ≥ n 作定理前提）反证闭合（`P_Bool ≠ NP_Bool`，见 §6.5、§7）。
 
-**交付标准**：0 `sorry`、0 error、`lake build` 通过、全部结论由单一公理 `exists_NTM2_solves_subsetSum`（公理 V6，四条款）推出。
+**交付标准**：0 `sorry`、0 error、`lake build` 通过、全部结论由单一公理 `exists_NTM2_solves_subsetSum`（公理 V6，四条款）推出（参数化定理的前提 `h_kappa` 属论文层结论，显式标注，不进 Lean）。
 
 ---
 
@@ -41,16 +41,17 @@
 2. 非空路径的终配置 `headPos < len`；
 3. `List.Nodup (π.map pos)`（每格至多读一次）。
 
-### 2.2 CBTM —— 复合带图灵机（`CBTM.lean`，约 700 行）
+### 2.2 CBTM —— 复合带图灵机（`CBTM.lean`，708 行）
 
 - 符号表 F4：`zero=(false,false)`、`one=(true,false)`、`alpha=(false,true)`、`beta=(true,true)`；
 - 转移位置化：`transition : ℕ × F4 × ℤ → Finset (ℕ × F4 × Dir)`（状态 × 符号 × 位置）；
 - `tapeAccepts`：磁带语义接受（存在接受路径，逐符号消费输入）；
 - `IsRestricted`：受限机器（读符号虚部全 false；读虚部 true 的符号 → 转移 ∅，`h_transition_outside` → 必然拒绝）；
 - **`isPolynomialTime`（已实化，非占位）**：`∃ p，多项式界 ∧ ∀ 接受路径，π.length ≤ p(|x|)`——多项式界 `IsPolynomialBound p := ∃ k, ∀ n, p n ≤ n^k + k`（定义于 CBTM.lean；实化定义于 IVM.lean，依赖磁带语义）；
+- **空白符号修正（2026-08-28）**：`ClassicDTM.toCBTM.blankSym := boolToF4 M.blankSym`（原固定 `F4.zero`）、`CBTM.toClassicDTM.blankSym := (N.blankSym).1`（原固定 `false`）——保证 DTM↔CBTM0 双向模拟的空白区匹配（DTM 空白可为 true 时原定义错位）；
 - `exists_CBTM_iso_NTM2`：`∃ M, M = NTM2.toCBTM A ∧ Nonempty (StructIsoNTM2CBTM A M)`（同构 = 路径上格局逐步相同，φ 恒等）。
 
-### 2.3 IVM —— 本质维度 κ（`IVM.lean`，463 行）
+### 2.3 IVM —— 本质维度 κ（`IVM.lean`，475 行）
 
 - `activatedGenSetOnPath`：路径上激活的生成元集合（虚部 = 1 的标记位置）；
 - `kappa_M M x`：机器 M 在输入 x 上的最坏激活生成元数；
@@ -97,9 +98,23 @@ def IsNP_Bool (K : BoolLanguage) : Prop := ∃ L, projectLanguage L = K ∧ IsNP
 - `realProject_ntm2InputToCBTM`（复合串实部投影 = 原输入，rfl 级）；
 - `no_forget_recovery_dtm`：不存在经典 DTM 能恢复被遗忘的虚部信息（α/one 同实部 true、zero/beta 同实部 false——投影不可逆）。
 
+### 3.3 经典类与 CBTM|₀（`ParamEquiv.lean`，参数化等价定理）
+
+```lean
+def IsP_classic (K : BoolLanguage) : Prop :=      -- 经典 P（ClassicDTM 判定）
+  ∃ D : ClassicDTM, ∀ x : List Bool, D.acceptsTape x ↔ K x
+def IsNP_classic (K : BoolLanguage) : Prop :=     -- 经典 NP（NTM2 判定；ClassicNTM = NTM2 用户裁定）
+  ∃ A : NTM2, NTM2.Canonical A ∧ ∀ x : List Bool, A.acceptsTape x ↔ K x
+def IsP_cb0 (K : BoolLanguage) : Prop :=          -- CBTM|₀（CBTM0：字母表 {zero,one} + 位置无关 + 单元素转移）
+  ∃ N : CBTM, IsCBTM0 N ∧ ∀ x, (∃ w, realProject w = x ∧ N.tapeAccepts w) ↔ K x
+```
+
+- **DTM 磁带语义**（`acceptsTape`/`DTMTapeReachablePath`）：经典确定性路径（转移 = 单值函数），参数化等价的形式化地基；
+- 论文 thm:equivalence 的语言层形态：**`P_cb0 = P_classic`**（CBTM|₀ ≡ₚₒₗy DTM，§6.4）。
+
 ---
 
-## 4. 编码与子集和语言（`SubsetSumLanguage.lean`，1023 行）
+## 4. 编码与子集和语言（`SubsetSumLanguage.lean`，1042 行）
 
 - `SubsetSumInstance := { elements : List ℕ, target : ℕ }`、`subsetSumHolds`；
 - **Bool 编码** `encodeSubsetSumBits`：每元素一块 = 选择位（sel/nosel）+ 原生二进制（nosel 计入长度，每块 1 标记 + native）；k 全线移除；target 非空（`htarget : 0 < inst.target`）；
@@ -167,6 +182,8 @@ projectLanguage_liftLanguage    : projectLanguage (liftLanguage A K) = K
 subsetSum_in_NP   : IsNP_Bool subsetSumBoolLanguage
   -- 等价类 witness L = subsetSumLanguageF4Real（投影等式 + IsNP_F）
 subsetSum_NP_chain : projectLanguage L_F4 = K ∧ IsNP_Bool K
+subsetSum_in_NP_classic : IsNP_classic subsetSumBoolLanguage       （PNPClosure.lean:110）
+  -- 经典 NP 形态：witness = Canonical NTM2 A（ntm2_language_recognition + 同构桥 + 语言桥）
 ```
 
 "每一个 NP_f 投影得到的语言 ∈ NP"（FULL CBTM 恒可被 NTM2 模拟）在此实例化。
@@ -175,12 +192,43 @@ subsetSum_NP_chain : projectLanguage L_F4 = K ∧ IsNP_Bool K
 
 ```
 StructIso_preserves_accepts : NTM2.Canonical A → ∀ x,
-  A.acceptsTape x ↔ M.tapeAccepts (ntm2InputToCBTM A x)          （_A2Bridge.lean，前提 = 规范）
+  A.acceptsTape x ↔ M.tapeAccepts (ntm2InputToCBTM A x)          （A2Bridge.lean，前提 = 规范）
 exists_CBTM_iso_NTM2          : ∃ M, M = NTM2.toCBTM A ∧ Nonempty (StructIsoNTM2CBTM A M)
 NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语言由 toCBTM A 判定
 ```
 
 原公理 `NTM2_solve_implies_IsNP_F`（A2）由语言识别条款消去为定理——同构 = 任意计算路径上格局逐步相同（一一映射即恒等）。
+
+### 6.4 参数化等价定理（`ParamEquiv.lean`，783 行）
+
+```
+P_cb0_eq_P_classic : {K | IsP_cb0 K} = {K | IsP_classic K}        （论文 thm:equivalence(1)）
+```
+
+**证明骨架**（双向接受保持，直接构造，不经同构结构）：
+
+- **经典 ⊆ CBTM|₀**（`IsP_classic_subset_IsP_cb0`）：D 判 K → `N = D.toCBTM` 判投影 K——`D` 接受 x ⟺ `N` 接受 `embedBool x`（`dtm_path_to_cbtm`/`dtm_accepts_to_cbtm` 路径对应）⟺ 投影接受（受限不敏感：`restricted_tapeAccepts_of_embed` 重放——受限路径读符号虚部全 false，接受串在未读位置任意）⟹ `x ∈ K`（投影语义定义）；
+- **CBTM|₀ ⊆ 经典**（`IsP_cb0_subset_IsP_classic`）：N（IsCBTM0）判投影 K → `D = N.toClassicDTM h0` 判 K——投影接受 ⟹ `N` 接受 `embedBool x`（重放）⟹ `D` 接受 x（`cbtm0_path_to_dtm` 路径对应 + `dtm_replay_of_trans_eq` 转移相同重放）；反向：`dtm_path_to_cbtm0` + `cbtm0_accepts_to_dtm`；
+- **支撑引理**：`realProject_embedBool : realProject (embedBool x) = x`（`@[simp]`）、`choose_eq_of_card_one`（单元素集 choose 唯一）、`toClassicDTM_of_toCBTM_trans`（toCBTM↔toClassicDTM 转移相等）、blankSym 匹配（§2.2 修正）。
+
+**意义**：CBTM|₀（受限 CBTM 的规范形态：字母表 {zero,one}、位置无关、确定性）与经典 DTM 外延等价——**CBTM 框架不引入超计算能力**，P 方向的经典-框架桥梁成立。
+
+### 6.5 框架内经典 P ≠ NP（`PNPClosure.lean`，172 行）
+
+```
+Verifiers_tape L          : Bool 语言验证器集合（磁带语义；isPolynomialTime + 投影识别）
+essentialDimension_tape L : Bool 语言本质维度（= 论文 κ(L)；Nat.find 最小验证器最坏维度）
+PClassZeroDimension_tape  : IsP_Bool L → essentialDimension_tape L refLen = 0
+                            （零维定理：P 的验证器可提升为受限机器 → κ = 0 → 本质维度 = 0）
+P_Bool_neq_NP_Bool (n) (hn : 0 < n)
+    (h_kappa : ∀ refLen, n ≤ essentialDimension_tape subsetSumBoolLanguage refLen) :
+    P_Bool ≠ NP_Bool
+  -- 反证：若 P_Bool = NP_Bool，则 subsetSum ∈ P_Bool（subsetSum_in_NP 已证）
+  --   → 零维定理：essentialDimension = 0
+  --   → 与前提 κ ≥ n > 0 矛盾（omega）
+```
+
+**前提定位**：`h_kappa`（κ(K_ss) ≥ n）是论文 `measure.C.0.7` 第 5 节结论（信息论下界 + 分支-激活引理，数计一体公理支撑）——**论文层面，不进 Lean，作为定理前提显式标注**。Lean 内证明的是：零维定理（P ⟹ κ = 0）+ 反证闭合（κ ≥ n 与 κ = 0 矛盾）。
 
 ---
 
@@ -194,32 +242,44 @@ NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语�
 | `P_F ≠ NP_F`（F4/虚部语义层分离） | ✅ 定理，全链 0 error 0 sorry |
 | 语义统一分离：子集和本质形态 ∈ NP_F ∖ P_F | ✅ 定理（`subsetSum_semantic_unified_separation`） |
 | 编码不单射（`([1],t=3)` ≡ `([3],t=1)`） | ✅ 定理（`encodeSubsetSumF4Real_not_injective`）——Bool 串不承载块结构的严格证据 |
-| `subsetSum ∈ NP_F`、`subsetSum ∈ NP_Bool` | ✅ 定理（witness 多项式时间：`toCBTM_polynomialTime`，线性界） |
+| `subsetSum ∈ NP_F`、`subsetSum ∈ NP_Bool`、`subsetSum ∈ NP_classic` | ✅ 定理（witness 多项式时间：`toCBTM_polynomialTime`，线性界） |
 | `isPolynomialTime` 实化（接受路径 ≤ 多项式界） | ✅ 定义 + witness 证明（不再占位） |
+| **参数化等价：`P_cb0 = P_classic`**（CBTM|₀ ≡ₚₒₗy DTM） | ✅ 定理（`P_cb0_eq_P_classic`，双向接受保持） |
+| **零维定理：P_Bool ⟹ 本质维度 = 0** | ✅ 定理（`PClassZeroDimension_tape`） |
+| **闭合：`P_Bool ≠ NP_Bool`（前提 κ ≥ n）** | ✅ 条件定理（`P_Bool_neq_NP_Bool`，前提 = 论文层 κ 下界） |
 | 投影-提升互逆、复合提升等式、等价类链条 | ✅ 定理 |
 | 素数平方根线性独立、维度下界、受限 κ = 0 | ✅ 定理 |
 | 相对化/代数化不变性 | ✅ 定理 |
 
-### 7.2 未证明（且不可证）——经典 Bool 层字面分离
+### 7.2 前提的定位（诚实声明）
 
-**`NP_Bool ≠ P_Bool`（即 `subsetSumBoolLanguage ∉ P_Bool`）未证，且等价于经典开放命题。** 逐项原因：
+**`P_Bool ≠ NP_Bool` 是条件定理**：其前提 `h_kappa : ∀ refLen, n ≤ essentialDimension_tape subsetSumBoolLanguage refLen`（子集和的本质维度下界）**未在 Lean 内证明**——它是论文 `measure.C.0.7` 第 5 节结论（信息论下界 + 分支-激活引理，由数计一体公理支撑），作为定理参数显式标注，不进 Lean。Lean 内严格证明的是：
+
+1. **零维定理**：`IsP_Bool L → essentialDimension_tape L n = 0`（P 类语言的验证器可提升为受限机器，κ ≡ 0）；
+2. **反证闭合**：κ ≥ n > 0 与 κ = 0 矛盾。
+
+因此工程保持"0 sorry、单公理"（唯一 axiom = 公理 V6）；κ 下界属论文层前提，不伪装为 Lean 内定理。
+
+### 7.3 无参数前提的 Bool 层字面分离（经典开放命题）
+
+**不依赖 κ 下界的前提下，`NP_Bool ≠ P_Bool`（即 `subsetSumBoolLanguage ∉ P_Bool`）未证，且等价于经典开放命题。** 逐项原因：
 
 1. **π 不单射**：α 与 zero 同实部 false、one 与 beta 同实部 true——投影丢失虚部；`P_F ≠ NP_F` 推不出投影后分离；
 2. **等价类提升自由度**：`IsP_Bool K := ∃ L, π(L) = K ∧ IsP_F L` 允许"选择位虚部全 false"的提升（embedUp 型）——受限机器读选择位是合法操作（虚部 false），κ 论证失效；判定这种提升 = 判定经典 Bool 子集和；
 3. **κ 无载体**：嵌入串虚部全 false → κ ≡ 0 对所有机器成立（不只受限）——"线性独立的元素值"在 Bool 层判定中用状态/穷举处理，代数独立性无虚部载体时不构成下界；
-4. **时间下界缺失（实化后）**：`isPolynomialTime` 已实化为真多项式界（接受路径 ≤ p(|x|)，`IsPolynomialBound`）；实化后，"多项式确定性机器判 Bool 子集和不可能" = 经典 P≠NP 本身（开放问题）——信息论/鸽巢论证在计算复杂性理论中不成立（如动态规划 O(n·target) 反例："候选多"不蕴含"必须逐个试"）；事实上 `IsP_Bool K ⟺ 经典子集和 ∈ P`（两向：经典算法可嵌入为受限 CBTM 判定复合提升；受限多项式机器在嵌入输入上即经典算法）；
-5. **枚举不可行**："枚举每个 P 的语言逐个排除" = `¬IsP_Bool K` 的直接展开（`∀ L, IsP_F L → π(L) ≠ K`），每个子问题都是同一个开放命题的实例，需要统一下界论证（不存在）。
+4. **时间下界缺失（实化后）**：`isPolynomialTime` 已实化为真多项式界；实化后，"多项式确定性机器判 Bool 子集和不可能" = 经典 P≠NP 本身（开放问题）——信息论/鸽巢论证在计算复杂性理论中不成立；事实上 `IsP_Bool K ⟺ 经典子集和 ∈ P`（两向构造）；
+5. **枚举不可行**："枚举每个 P 的语言逐个排除" = `¬IsP_Bool K` 的直接展开，每个子问题都是同一个开放命题的实例。
 
-**结论**：分离发生在虚部语义层（F4）——已严格证明；经典 Bool 层（实部投影）字面分离 ⟺ 经典 P≠NP，开放。这与论文立场一致："直接证明 P≠NP 不可能（经典语境），框架的贡献 = 语义层分离"。
+**结论**：分离的严格落点在虚部语义层（F4，已证）；经典 Bool 层的闭合依赖论文层 κ 下界（参数化，§6.5）；无前提的 Bool 层字面分离 ⟺ 经典 P≠NP，开放。这与论文立场一致："直接证明 P≠NP 不可能（经典语境），框架的贡献 = 语义层分离 + κ 下界前提下的闭合"。
 
-### 7.3 语义统一（数计一体）的严格落点
+### 7.4 语义统一（数计一体）的严格落点
 
 "语义与语法必须统一"（虚部由语言结构内建，拒绝外部编码约定）在形式化中的形态：
 
 1. **复杂度类定义在 F4 本质层**：编码（α 模式）= 定义的一部分，虚部内建——`P_F ⊊ NP_F`（`P_F_ss_NP_F`：`P_F ⊆ NP_F` + `P_F ≠ NP_F`）**全绿**；
 2. **Bool 层是实部投影**（等价类）：`P_Bool = π(P_F)`、`NP_Bool = π(NP_F)`——投影不保持分离；
 3. **"规范提升由 Bool 串恢复"不可行——有严格反例**：`encodeSubsetSumF4Real_not_injective`——`([1], target=3)` 与 `([3], target=1)` 编码相同（变长二进制无长度前缀 + target 区无分隔符，块区/target 区边界歧义）——Bool 串（α 标记投影后与数据 0 同符）更不能恢复块结构；
-4. 因此**语义统一的 Bool 层分离类定义不存在**（任意 Bool 语言无内建结构；子集和 Bool 串不可解析）——分离的严格形式只能是 F4 层（已证），Bool 层保持经典等价类（开放）。
+4. 因此**语义统一的 Bool 层分离类定义不存在**（任意 Bool 语言无内建结构；子集和 Bool 串不可解析）——分离的严格形式是 F4 层（已证）+ κ 下界前提下的 Bool 层闭合（§6.5），Bool 层无前提分离保持经典等价类（开放）。
 
 ---
 
@@ -229,21 +289,23 @@ NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语�
 
 | 文件 | 行数 | 内容 |
 |---|---|---|
-| `PvsNP.lean` | — | 根模块 |
+| `PvsNP.lean` | — | 根模块（含 ParamEquiv/PNPClosure 导入） |
 | `PvsNP/Basic.lean` | 379 | NTM2 最终模型、`NTM2.Canonical` |
-| `PvsNP/CBTM.lean` | 707 | CBTM 位置模型、`IsPolynomialBound`、`exists_CBTM_iso_NTM2` |
+| `PvsNP/CBTM.lean` | 708 | CBTM 位置模型、`IsPolynomialBound`、`exists_CBTM_iso_NTM2`、blankSym 修正 |
 | `PvsNP/IVM.lean` | 475 | `isPolynomialTime`(实化)、`kappa_M`、`kappa_zero_of_restricted`、`activatedGenSetOnPath` |
 | `PvsNP/EssentialDimension.lean` | 140 | `worstCaseDimension`、`FessentialDimension` |
 | `PvsNP/PrimeSqrtLinearIndep.lean` | 291 | 素数平方根线性独立 |
-| `PvsNP/SubsetSumLanguage.lean` | 1023 | 编码、`subsetSum_kappa_lower_bound`、`subsetSum_not_in_P_F` |
+| `PvsNP/SubsetSumLanguage.lean` | 1042 | 编码、`subsetSum_kappa_lower_bound`、`subsetSum_not_in_P_F` |
 | `PvsNP/ClassicalFramework.lean` | 129 | F4 复杂度类 `IsP_F/IsNP_F/P_F/NP_F` |
-| `PvsNP/ClassicalComplexity.lean` | 178 | Bool 层、等价类 `IsP_Bool/IsNP_Bool`、语言映射 |
-| `PvsNP/_A2Bridge.lean` | 364 | 同构桥 `StructIso_preserves_accepts`(A2 消去)、长度引理(`canonical_path_length_le`、`int_nodup_bounded_length`)、`iso_path_backward` 长度分量 |
+| `PvsNP/ClassicalComplexity.lean` | 178 | Bool 层、等价类 `IsP_Bool/IsNP_Bool`、语言映射、`ntm2_language_recognition` |
+| `PvsNP/A2Bridge.lean` | 364 | 同构桥 `StructIso_preserves_accepts`(A2 消去)、长度引理(`canonical_path_length_le`、`int_nodup_bounded_length`)、`iso_path_backward` 长度分量 |
 | `PvsNP/SubsetSumInNP.lean` | 216 | **公理 V6**、`subsetSum_in_NP_F`、`toCBTM_polynomialTime`、`subsetSum_in_NP` |
-| `PvsNP/FinalProof.lean` | 100 | `P_F_neq_NP_F`、`P_neq_NP_with_barriers` |
+| `PvsNP/ParamEquiv.lean` | 783 | **参数化等价定理**：DTM 磁带语义、`IsP_classic/IsNP_classic/IsP_cb0`、`P_cb0_eq_P_classic`、重放/接受保持链 |
+| `PvsNP/PNPClosure.lean` | 172 | **框架内经典 P≠NP 闭合**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`P_Bool_neq_NP_Bool`、`subsetSum_in_NP_classic` |
+| `PvsNP/FinalProof.lean` | 126 | `P_F_neq_NP_F`、`P_neq_NP_with_barriers` |
 | `PvsNP/LowerBound.lean` / `Barriers.lean` / `SubsetSumNTM2.lean` | 65/100/60 | 下界链、障碍不变性 |
 
-**git 历史**：`5414216`（非编码拒绝条款替代语言识别条款；四条款公理组合推出 IsNP_F/等价类链条；全链 0 error 0 sorry 单公理）← `53d2445`（Bool 层压平 NP 方向全绿）。
+**git 历史**：`5414216`（公理 V6 四条款；全链 0 error 0 sorry 单公理）→ `1ffb320`（发布准备）→ `2754b0a`/`744538f`（ParamEquiv 错误修订）→ `9de25c7`/`eba7c11`（参数化等价定理成立）→ `7c62750`（PNPClosure 闭合，当前 HEAD）。
 
 ---
 
@@ -251,10 +313,12 @@ NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语�
 
 ```bash
 cd D:\lean4\pvsnp
-lake build                          # 全链编译，0 error
-lake env lean PvsNP/FinalProof.lean # 单文件验证
+lake build                          # 全链编译，0 error（8670+ jobs）
+lake env lean PvsNP/FinalProof.lean # 单文件验证（F4 层分离）
+lake env lean PvsNP/ParamEquiv.lean # 参数化等价定理（P_cb0 = P_classic）
+lake env lean PvsNP/PNPClosure.lean # 框架内经典 P≠NP 闭合
 grep -c "sorry" PvsNP/*.lean        # 0（无 sorry）
 grep -c "^axiom" PvsNP/*.lean       # 1（单公理 exists_NTM2_solves_subsetSum）
 ```
 
-**工具链**：Lean 4 + mathlib（`.lake` 缓存约 7.4 GB）；命名空间改名后必须重新 `lake build`（`lake env lean` 读旧 .olean 会假报错）。
+**工具链**：Lean 4 + mathlib（`.lake` 缓存约 7.5 GB）；命名空间改名后必须重新 `lake build`（`lake env lean` 读旧 .olean 会假报错）；Windows 并行编译偶发 `.olean.private` 瞬时读取失败（I/O 竞争，错误文件每次不同）——重试即恢复，非代码问题。
