@@ -741,7 +741,12 @@ theorem IsP_cb0_subset_IsP_classic (K : BoolLanguage) (hP : IsP_cb0 K) : IsP_cla
         simpa [Finset.mem_insert, Finset.mem_singleton] using hs
       · intro s hs
         rw [h0.alphabet_eq] at hs
-        simpa [Finset.mem_insert, Finset.mem_singleton] using hs
+        simp at hs
+        rcases hs with hz | ho
+        · rw [hz]
+          rfl
+        · rw [ho]
+          rfl
       · intro q s i hs
         exact h0.card_one q s i hs
       · exact N.h_blank_in_alphabet
