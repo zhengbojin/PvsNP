@@ -140,6 +140,15 @@ def IsP_cb0 (K : BoolLanguage) : Prop :=
 -- 4. 受限机器的重放引理：接受 w ⟺ 接受 embed(Re w)（未读位置不敏感）
 -- ======================================================================
 
+/-- 嵌入串的实部投影还原原串（展开 ∘ 与 F4.re 后 rfl）。 -/
+@[simp] lemma realProject_embedBool (x : List Bool) : realProject (embedBool x) = x := by
+  unfold realProject embedBool
+  rw [List.map_map]
+  have hfun : F4.re ∘ (fun b : Bool => (b, false)) = id := by
+    funext b
+    rfl
+  rw [hfun, List.map_id]
+
 /-- 受限机器路径的每步读符号在字母表内（转移非空 ⟹ 读符号 ∈ 字母表）。 -/
 lemma restricted_step_read_in_alphabet (M : CBTM) (hrest : IsRestricted M) (w : List F4)
     (π : ComputationPath) (cfg : CBTMConfig M w) (hr : TapeReachablePath M w π cfg) :
@@ -445,7 +454,15 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         simp [← hres2, f4ToBool]
       · rw [hcfg']
         dsimp [cbtm0CfgToDTM, step', DTMStepCfg, stepConfig]
-        ext <;> simp
+      · rw [hcfg']
+        dsimp [cbtm0CfgToDTM, step', DTMStepCfg, stepConfig]
+        rw [DTMCfg.mk.injEq]
+        constructor
+        · rfl
+        · constructor
+          · funext i
+            by_cases hi : i = cfg₀.headPos <;> simp [hi]
+          · rfl
 
 /-- CBTM0 接受（embed 输入）⟹ toClassicDTM 接受。 -/
 lemma cbtm0_accepts_to_dtm (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
@@ -712,8 +729,7 @@ theorem IsP_classic_subset_IsP_cb0 (K : BoolLanguage) (hP : IsP_classic K) : IsP
       exact (hD x).1 (cbtm_accepts_embed_to_dtm D x hembed)
     · intro hx
       have haccD : D.acceptsTape x := (hD x).2 hx
-      refine ⟨embedBool x, ?_, dtm_accepts_to_cbtm D x haccD⟩
-      simp [embedBool, realProject, F4.re, Function.comp]
+      refine ⟨embedBool x, realProject_embedBool x, dtm_accepts_to_cbtm D x haccD⟩
 
 /-- CBTM|₀ 判定 ⟹ 经典 DTM 判定。
     投影接受 x ⟺ N 接受 embed x（重放：受限 N 的接受串投影 = 嵌入接受）
@@ -726,7 +742,7 @@ theorem IsP_cb0_subset_IsP_classic (K : BoolLanguage) (hP : IsP_cb0 K) : IsP_cla
   · intro hacc
     -- D 接受 x → N 接受 embed x（反向接受保持）→ 投影接受（w = embed x）→ x ∈ K
     have hNacc : N.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm0 N h0 x hacc
-    exact (hN x).1 ⟨embedBool x, by simp [embedBool, realProject, F4.re, Function.comp], hNacc⟩
+    exact (hN x).1 ⟨embedBool x, realProject_embedBool x, hNacc⟩
   · intro hx
     have hproj := (hN x).2 hx
     rcases hproj with ⟨w, hw, hacc⟩
