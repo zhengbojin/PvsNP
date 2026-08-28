@@ -536,7 +536,6 @@ lemma dtm_replay_of_trans_eq {M1 M2 : ClassicDTM}
         · subst i
           simp [hhp']
         · rw [htape' i]
-          simp [hhp']
 
 /-- 转移相同、起始状态与接受状态集相同的两台 DTM：接受保持。 -/
 lemma dtm_accepts_of_trans_eq {M1 M2 : ClassicDTM}
@@ -561,7 +560,7 @@ lemma cbtm_accepts_embed_to_dtm (M : ClassicDTM) (x : List Bool) :
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
-    (fun q b => (toClassicDTM_of_toCBTM_trans M q b).symm) x h1
+    (fun q b => toClassicDTM_of_toCBTM_trans M q b) x h1
 
 -- ======================================================================
 -- 6. 参数化等价定理（P 方向）：IsP_cb0 = IsP_classic
@@ -588,7 +587,15 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
         by_cases h : 0 ≤ i ∧ i.toNat < x.length
         · simp [initialTapeOf, h, embedBool, List.getElem_map, boolToF4]
         · rw [CBTM.toClassicDTM]
-          simp [initialTapeOf, h, boolToF4]
+          simp [initialTapeOf, h]
+          -- 空白区：N.blankSym 虚部 false（alphabet = {zero, one}）
+          have hbim : F4.im N.blankSym = false := by
+            have hb : N.blankSym ∈ N.alphabet := N.h_blank_in_alphabet
+            rw [h0.alphabet_eq] at hb
+            simp at hb
+            rcases hb with rfl | rfl <;> rfl
+          rw [← boolToF4_f4ToBool_of_im_false N.blankSym hbim]
+          rfl
   | cons π₀ step cfg₀ hrc hfrom hread htrans hpos ih =>
       rcases ih with ⟨π', cfg', hrc', hcfg'⟩
       let step' : TransitionStep := {
@@ -601,7 +608,6 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
         rw [hfrom]
         rw [hcfg']
         dsimp [dtmCfgToCBTM0]
-        rfl
       · dsimp [step']
         rw [hcfg']
         change boolToF4 step.readSym = boolToF4 (cfg₀.tapeAt cfg₀.headPos)
