@@ -445,11 +445,7 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         simp [← hres2, f4ToBool]
       · rw [hcfg']
         dsimp [cbtm0CfgToDTM, step', DTMStepCfg, stepConfig]
-        congr
-        funext i
-        by_cases hi : i = cfg₀.headPos
-        · simp [hi]
-        · simp [hi]
+        ext <;> simp
 
 /-- CBTM0 接受（embed 输入）⟹ toClassicDTM 接受。 -/
 lemma cbtm0_accepts_to_dtm (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
@@ -717,7 +713,7 @@ theorem IsP_classic_subset_IsP_cb0 (K : BoolLanguage) (hP : IsP_classic K) : IsP
     · intro hx
       have haccD : D.acceptsTape x := (hD x).2 hx
       refine ⟨embedBool x, ?_, dtm_accepts_to_cbtm D x haccD⟩
-      simp [embedBool, realProject, F4.re]
+      simp [embedBool, realProject, F4.re, Function.comp]
 
 /-- CBTM|₀ 判定 ⟹ 经典 DTM 判定。
     投影接受 x ⟺ N 接受 embed x（重放：受限 N 的接受串投影 = 嵌入接受）
@@ -730,7 +726,7 @@ theorem IsP_cb0_subset_IsP_classic (K : BoolLanguage) (hP : IsP_cb0 K) : IsP_cla
   · intro hacc
     -- D 接受 x → N 接受 embed x（反向接受保持）→ 投影接受（w = embed x）→ x ∈ K
     have hNacc : N.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm0 N h0 x hacc
-    exact (hN x).1 ⟨embedBool x, by simp [embedBool, realProject, F4.re], hNacc⟩
+    exact (hN x).1 ⟨embedBool x, by simp [embedBool, realProject, F4.re, Function.comp], hNacc⟩
   · intro hx
     have hproj := (hN x).2 hx
     rcases hproj with ⟨w, hw, hacc⟩
