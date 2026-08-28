@@ -193,19 +193,6 @@ theorem subsetSum_in_NP_classic : IsNP_classic subsetSumBoolLanguage := by
 --
 -- 注：全部由已有定理组装，0 新公理；维度矛盾与多项式时间无关（无时间前提）。
 
-/-- IsCBTM0 → IsRestricted：字母表 {zero, one} 的机器是受限机器。 -/
-theorem isCBTM0_isRestricted (M : CBTM) (h0 : IsCBTM0 M) : IsRestricted M := by
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · intro s hs
-    rw [h0.alphabet_eq] at hs
-    simpa [Finset.mem_insert, Finset.mem_singleton] using hs
-  · intro s hs
-    rw [h0.alphabet_eq] at hs
-    simp at hs
-    rcases hs with rfl | rfl <;> rfl
-  · exact h0.card_one
-  · simpa [h0.alphabet_eq] using M.h_blank_in_alphabet
-
 /-- 不存在受限 CBTM 识别 F4 层子集和语言（无时间前提：维度矛盾与时间无关）。 -/
 theorem no_restricted_recognizes_subsetSumF4 :
     ¬ ∃ M : CBTM, IsRestricted M ∧
@@ -231,19 +218,18 @@ theorem no_cbtm0_recognizes_subsetSumF4 :
   intro ⟨M, h0, hcorrect⟩
   exact no_restricted_recognizes_subsetSumF4 ⟨M, isCBTM0_isRestricted M h0, hcorrect⟩
 
-/-- 维度 0 保持：任意经典 DTM 的 CBTM0 模拟，worstCaseDimension = 0（受限机器）。 -/
+/-- 维度 0 保持：任意经典 DTM 的受限 CBTM 模拟（toCBTM），worstCaseDimension = 0。 -/
 theorem dtm_sim_worstCaseDimension_zero (D : ClassicDTM) (n : ℕ) :
     worstCaseDimension (D.toCBTM) n = 0 :=
-  worstCaseDimension_zero_of_restricted (D.toCBTM) n
-    (isCBTM0_isRestricted (D.toCBTM) (toCBTM_isCBTM0 D))
+  worstCaseDimension_zero_of_restricted (D.toCBTM) n (toCBTM_isRestricted D)
 
-/-- 矛盾传到 CBTM0：不存在经典 DTM（经 toCBTM 逐一步模拟）识别 F4 层子集和语言。
-    任意经典 P 算法在 CBTM 框架内的形态 = CBTM0（受限，维度 0）；
+/-- 矛盾传到受限 CBTM：不存在经典 DTM（经 toCBTM 逐一步模拟）识别 F4 层子集和语言。
+    任意经典 P 算法在 CBTM 框架内的形态 = 受限 CBTM（维度 0）；
     α 编码语言的选项下界要求维度 ≥ 元素数——矛盾。 -/
 theorem no_dtm_recognizes_subsetSumF4 :
     ¬ ∃ D : ClassicDTM, ∀ w : List F4,
       (D.toCBTM).tapeAccepts w ↔ subsetSumLanguageF4Real w := by
   intro ⟨D, hcorrect⟩
-  exact no_cbtm0_recognizes_subsetSumF4 ⟨D.toCBTM, toCBTM_isCBTM0 D, hcorrect⟩
+  exact no_restricted_recognizes_subsetSumF4 ⟨D.toCBTM, toCBTM_isRestricted D, hcorrect⟩
 
 end PvsNP

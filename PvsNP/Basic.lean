@@ -193,13 +193,13 @@ structure ClassicDTM where
   acceptStates : Finset ℕ
   rejectStates : Finset ℕ
   alphabet : Finset Bool := [false, true].toFinset
-  transition : ℕ × Bool → ClassicDTMTransitionResult
+  transition : ℕ × Bool × ℤ → ClassicDTMTransitionResult
   blankSym : Bool := false
   h_start_in_states : startState ∈ states
   h_accept_subset : acceptStates ⊆ states
   h_reject_subset : rejectStates ⊆ states
   h_accept_reject_disjoint : acceptStates ∩ rejectStates = ∅
-  isValid : ∀ q s, (transition (q, s)).nextState ∈ states
+  isValid : ∀ q s i, (transition (q, s, i)).nextState ∈ states
   h_alphabet_all : alphabet = {false, true}
 
 

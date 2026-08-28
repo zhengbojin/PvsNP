@@ -147,12 +147,23 @@ lemma imTrueCount_append (l1 l2 : List F4) : imTrueCount (l1 ++ l2) = imTrueCoun
   unfold imTrueCount
   rw [List.filter_append, List.length_append]
 
-/-- 受限 CBTM：字母表仅含实部符号，转移确定（无分支）。 -/
+/-- 受限 CBTM：字母表恰好 {zero, one}（实部符号），转移确定（无分支）。
+    转移 (q, s, i) 位置相关——与经典 DTM 转移 (q, s, i) 逐点对应（同一模型）。 -/
 structure CBTM.IsRestricted (M : CBTM) : Prop where
-  h_alphabet_subset : M.alphabet ⊆ {F4.zero, F4.one}
-  h_alphabet_im_false : ∀ s, s ∈ M.alphabet → F4.im s = false
+  alphabet_eq : M.alphabet = {F4.zero, F4.one}
   h_card_one : ∀ q s i, s ∈ M.alphabet → (M.transition (q, s, i)).card = 1
   h_blank_in_alphabet : M.blankSym ∈ M.alphabet
+
+/-- 受限机器字母表元素虚部全 false（由 alphabet = {zero, one} 推出）。 -/
+lemma isRestricted_im_false {M : CBTM} (h : CBTM.IsRestricted M) (s : F4) (hs : s ∈ M.alphabet) :
+    F4.im s = false := by
+  rw [h.alphabet_eq] at hs
+  simp at hs
+  rcases hs with hz | ho
+  · rw [hz]
+    rfl
+  · rw [ho]
+    rfl
 
 /-- 多项式界：存在 k，∀ n，p n ≤ n^k + k（标准多项式形态，足够宽松）。
     CBTM 的多项式时间：存在多项式界 p，任意接受路径长度 ≤ p(输入长度)。
@@ -182,6 +193,11 @@ structure IsCBTM0 (M : CBTM) : Prop where
   card_one : ∀ q s i, s ∈ M.alphabet → (M.transition (q, s, i)).card = 1
   pos_indep : ∀ q s i j, s ∈ M.alphabet → M.transition (q, s, i) = M.transition (q, s, j)
 
+/-- IsCBTM0 → IsRestricted：位置无关受限机器是受限机器。 -/
+theorem isCBTM0_isRestricted (M : CBTM) (h0 : IsCBTM0 M) : CBTM.IsRestricted M := by
+  refine ⟨h0.alphabet_eq, h0.card_one, ?_⟩
+  simpa [h0.alphabet_eq] using M.h_blank_in_alphabet
+
 -- ===========================================================================
 -- §4. 完全 CBTM
 -- ===========================================================================
@@ -193,30 +209,31 @@ def IsFull (M : CBTM) : Prop :=
 -- 转换：ClassicDTM → CBTM0
 -- ===========================================================================
 
-/-- ClassicDTM 转移函数的 F4 投影：在 {zero, one} 上给出单元素转移集，其余为空（位置无关）。 -/
+/-- ClassicDTM 转移函数的 F4 投影：在 {zero, one} 上给出单元素转移集，其余为空。
+    位置参数 i 原样传递（经典 DTM 转移 = (q, s, i)，i 为读写头位置）。 -/
 def ClassicDTM.toCBTMTrans (M : ClassicDTM) : ℕ × F4 × ℤ → Finset CBTMTransResult :=
-  fun (q, s, _i) =>
+  fun (q, s, i) =>
     if s ∈ ({F4.zero, F4.one} : Finset F4) then
-      {CBTMTransResult.mk (M.transition (q, f4ToBool s)).nextState
-         (boolToF4 (M.transition (q, f4ToBool s)).writeSym)
-         (M.transition (q, f4ToBool s)).move}
+      {CBTMTransResult.mk (M.transition (q, f4ToBool s, i)).nextState
+         (boolToF4 (M.transition (q, f4ToBool s, i)).writeSym)
+         (M.transition (q, f4ToBool s, i)).move}
     else
       ∅
 
 @[simp] theorem ClassicDTM.toCBTMTrans_zero (M : ClassicDTM) (q : ℕ) (i : ℤ) :
     ClassicDTM.toCBTMTrans M (q, F4.zero, i) =
-      {CBTMTransResult.mk (M.transition (q, false)).nextState
-         (boolToF4 (M.transition (q, false)).writeSym)
-         (M.transition (q, false)).move} := by
+      {CBTMTransResult.mk (M.transition (q, false, i)).nextState
+         (boolToF4 (M.transition (q, false, i)).writeSym)
+         (M.transition (q, false, i)).move} := by
   simp only [ClassicDTM.toCBTMTrans]
   rw [if_pos (by simp)]
   rfl
 
 @[simp] theorem ClassicDTM.toCBTMTrans_one (M : ClassicDTM) (q : ℕ) (i : ℤ) :
     ClassicDTM.toCBTMTrans M (q, F4.one, i) =
-      {CBTMTransResult.mk (M.transition (q, true)).nextState
-         (boolToF4 (M.transition (q, true)).writeSym)
-         (M.transition (q, true)).move} := by
+      {CBTMTransResult.mk (M.transition (q, true, i)).nextState
+         (boolToF4 (M.transition (q, true, i)).writeSym)
+         (M.transition (q, true, i)).move} := by
   simp only [ClassicDTM.toCBTMTrans]
   rw [if_pos (by simp)]
   rfl
@@ -254,11 +271,11 @@ def ClassicDTM.toCBTM (M : ClassicDTM) : CBTM :=
       · rw [ClassicDTM.toCBTMTrans_zero M q i] at hr
         rw [Finset.mem_singleton] at hr
         subst hr
-        simpa using (M.isValid q false)
+        simpa using (M.isValid q false i)
       · rw [ClassicDTM.toCBTMTrans_one M q i] at hr
         rw [Finset.mem_singleton] at hr
         subst hr
-        simpa using (M.isValid q true)
+        simpa using (M.isValid q true i)
     h_transition_outside := by
       intro q s i hs_not
       simp only [ClassicDTM.toCBTMTrans]
@@ -269,46 +286,47 @@ def ClassicDTM.toCBTM (M : ClassicDTM) : CBTM :=
 -- 转换：CBTM0 → ClassicDTM
 -- ===========================================================================
 
-lemma boolToF4_mem_alphabet_of_isCBTM0 {N : CBTM} (h0 : IsCBTM0 N) (b : Bool) :
+lemma boolToF4_mem_alphabet_of_isRestricted {N : CBTM} (h : CBTM.IsRestricted N) (b : Bool) :
     boolToF4 b ∈ N.alphabet := by
-  rw [h0.alphabet_eq]
+  rw [h.alphabet_eq]
   cases b <;> decide
 
-/-- CBTM0 的转移函数投影回经典 DTM（唯一转移的非计算选择；位置无关，取 0 占位）。 -/
-noncomputable def CBTM.toClassicDTMTrans (N : CBTM) (h0 : IsCBTM0 N) :
-    ℕ × Bool → ClassicDTMTransitionResult :=
-  fun (q, b) =>
+/-- 受限 CBTM 的转移函数投影回经典 DTM：逐点对应 (q, s, i) ↦ (q, s, i)
+    （唯一转移的非计算选择；位置参数原样传递——受限 CBTM 与经典 DTM 同一模型）。 -/
+noncomputable def CBTM.toClassicDTMTrans (N : CBTM) (h : CBTM.IsRestricted N) :
+    ℕ × Bool × ℤ → ClassicDTMTransitionResult :=
+  fun (q, b, i) =>
     let s : F4 := boolToF4 b
     let r : CBTMTransResult :=
-      (card_eq_one_unique_mem (N.transition (q, s, 0))
-        (h0.card_one q s 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 b))).choose
+      (card_eq_one_unique_mem (N.transition (q, s, i))
+        (h.h_card_one q s i (boolToF4_mem_alphabet_of_isRestricted h b))).choose
     ClassicDTMTransitionResult.mk r.nextState (f4ToBool r.writeSym) r.moveDir
 
-lemma toClassicDTMTrans_nextState_mem (N : CBTM) (h0 : IsCBTM0 N) (q : ℕ) (b : Bool) :
-    (CBTM.toClassicDTMTrans N h0 (q, b)).nextState ∈ N.states := by
+lemma toClassicDTMTrans_nextState_mem (N : CBTM) (h : CBTM.IsRestricted N) (q : ℕ) (b : Bool) (i : ℤ) :
+    (CBTM.toClassicDTMTrans N h (q, b, i)).nextState ∈ N.states := by
   simp only [CBTM.toClassicDTMTrans]
   let s : F4 := boolToF4 b
-  have hs : s ∈ N.alphabet := boolToF4_mem_alphabet_of_isCBTM0 h0 b
-  have h_unique : ∃! r : CBTMTransResult, r ∈ N.transition (q, s, 0) :=
-    card_eq_one_unique_mem (N.transition (q, s, 0)) (h0.card_one q s 0 hs)
-  exact N.isValid q s 0 hs h_unique.choose h_unique.choose_spec.1
+  have hs : s ∈ N.alphabet := boolToF4_mem_alphabet_of_isRestricted h b
+  have h_unique : ∃! r : CBTMTransResult, r ∈ N.transition (q, s, i) :=
+    card_eq_one_unique_mem (N.transition (q, s, i)) (h.h_card_one q s i hs)
+  exact N.isValid q s i hs h_unique.choose h_unique.choose_spec.1
 
-noncomputable def CBTM.toClassicDTM (N : CBTM) (h0 : IsCBTM0 N) : ClassicDTM :=
+noncomputable def CBTM.toClassicDTM (N : CBTM) (h : CBTM.IsRestricted N) : ClassicDTM :=
   {
     states      := N.states
     startState  := N.startState
     acceptStates := N.acceptStates
     rejectStates := N.rejectStates
     alphabet    := {false, true}
-    transition  := CBTM.toClassicDTMTrans N h0
+    transition  := CBTM.toClassicDTMTrans N h
     blankSym    := (N.blankSym).1
     h_start_in_states   := N.h_start_in_states
     h_accept_subset     := N.h_accept_subset
     h_reject_subset     := N.h_reject_subset
     h_accept_reject_disjoint := N.h_accept_reject_disjoint
     isValid := by
-      intro q b
-      exact toClassicDTMTrans_nextState_mem N h0 q b
+      intro q b i
+      exact toClassicDTMTrans_nextState_mem N h q b i
     h_alphabet_all := by simp
   }
 
@@ -317,14 +335,14 @@ noncomputable def CBTM.toClassicDTM (N : CBTM) (h0 : IsCBTM0 N) : ClassicDTM :=
 -- ===========================================================================
 
 structure StructIsoClassicDTM (M : ClassicDTM) (N : CBTM) : Type where
-  h_restricted : IsCBTM0 N
+  h_restricted : CBTM.IsRestricted N
   h_states_eq : M.states = N.states
   φ_symbol : Equiv Bool { s : F4 // s ∈ N.alphabet }
   h_start : M.startState = N.startState
   h_accept : N.acceptStates = M.acceptStates
   h_reject : N.rejectStates = M.rejectStates
   h_transition : ∀ (q : ℕ) (s : Bool) (i : ℤ),
-    let res := M.transition (q, s)
+    let res := M.transition (q, s, i)
     let r : CBTMTransResult := {
       nextState := res.nextState
       writeSym := (φ_symbol res.writeSym).val
@@ -356,64 +374,65 @@ lemma eq_singleton_choose_of_card_eq_one {α : Type*} (s : Finset α) (h : s.car
   rw [hchoose]
 
 -- ===========================================================================
--- 同构定理：ClassicDTM ↔ CBTM0
+-- 同构定理：ClassicDTM ↔ 受限 CBTM（同一模型：转移 (q, s, i)，i = 读写头位置）
 -- ===========================================================================
 
-theorem exists_CBTM0_iso_ClassicDTM (M : ClassicDTM) :
+theorem exists_restrictedCBTM_iso_ClassicDTM (M : ClassicDTM) :
     ∃ (N : CBTM), Nonempty (StructIsoClassicDTM M N) := by
   let N := M.toCBTM
-  have h0 : IsCBTM0 N := by
-    refine ⟨rfl, ?_, ?_⟩
+  have hrest : CBTM.IsRestricted N := by
+    refine ⟨?_, ?_, ?_⟩
+    · dsimp [N]
+      rfl
     · intro q s i hs
       have hcases : s = F4.zero ∨ s = F4.one := by
         dsimp [N] at hs
         simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
       rcases hcases with rfl | rfl <;> unfold N <;> simp [ClassicDTM.toCBTM]
-    · intro q s i j hs
-      dsimp [N]
-      rfl
+    · dsimp [N]
+      cases M.blankSym <;> simp [ClassicDTM.toCBTM, boolToF4, F4.zero, F4.one]
   let φ_symbol : Equiv Bool { s : F4 // s ∈ N.alphabet } := {
-    toFun := fun b => ⟨boolToF4 b, boolToF4_mem_alphabet_of_isCBTM0 h0 b⟩
+    toFun := fun b => ⟨boolToF4 b, boolToF4_mem_alphabet_of_isRestricted hrest b⟩
     invFun := fun s => f4ToBool s.1
     left_inv := by intro b; rfl
     right_inv := by
       intro s
       rcases s with ⟨val, prop⟩
       have hval : val = F4.zero ∨ val = F4.one := by
-        rw [h0.alphabet_eq] at prop
+        rw [hrest.alphabet_eq] at prop
         simpa [Finset.mem_insert, Finset.mem_singleton] using prop
       rcases hval with rfl | rfl <;> apply Subtype.ext <;> rfl
   }
   refine ⟨N, ⟨{
-    h_restricted := h0
+    h_restricted := hrest
     h_states_eq := rfl
     φ_symbol := φ_symbol
     h_start := rfl
     h_accept := rfl
     h_reject := rfl
     h_transition := by
-      intro q s
+      intro q s i
       have hφ_val (b : Bool) : (φ_symbol b).val = boolToF4 b := rfl
       cases s <;> simp [hφ_val] <;> dsimp [N, ClassicDTM.toCBTM] <;> simp
   }⟩⟩
 
-theorem exists_ClassicDTM_iso_CBTM0 (N : CBTM) (h0 : IsCBTM0 N) :
+theorem exists_ClassicDTM_iso_restrictedCBTM (N : CBTM) (h : CBTM.IsRestricted N) :
     ∃ (M : ClassicDTM), Nonempty (StructIsoClassicDTM M N) := by
-  let M := N.toClassicDTM h0
+  let M := N.toClassicDTM h
   let φ_symbol : Equiv Bool { s : F4 // s ∈ N.alphabet } := {
-    toFun := fun b => ⟨boolToF4 b, boolToF4_mem_alphabet_of_isCBTM0 h0 b⟩
+    toFun := fun b => ⟨boolToF4 b, boolToF4_mem_alphabet_of_isRestricted h b⟩
     invFun := fun s => f4ToBool s.1
     left_inv := by intro b; rfl
     right_inv := by
       intro s
       rcases s with ⟨val, prop⟩
       have hval : val = F4.zero ∨ val = F4.one := by
-        rw [h0.alphabet_eq] at prop
+        rw [h.alphabet_eq] at prop
         simpa [Finset.mem_insert, Finset.mem_singleton] using prop
       rcases hval with rfl | rfl <;> apply Subtype.ext <;> rfl
   }
   refine ⟨M, ⟨{
-    h_restricted := h0
+    h_restricted := h
     h_states_eq := rfl
     φ_symbol := φ_symbol
     h_start := rfl
@@ -423,26 +442,23 @@ theorem exists_ClassicDTM_iso_CBTM0 (N : CBTM) (h0 : IsCBTM0 N) :
       intro q s i
       have hφ_val (b : Bool) : (φ_symbol b).val = boolToF4 b := rfl
       let r' : CBTMTransResult :=
-        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, 0))
-          (h0.card_one q (boolToF4 s) 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 s))).choose
-      have hcard : (N.transition (q, boolToF4 s, 0)).card = 1 :=
-        h0.card_one q (boolToF4 s) 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 s)
-      have hr' : r' ∈ N.transition (q, boolToF4 s, 0) :=
-        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, 0)) hcard).choose_spec.1
+        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, i))
+          (h.h_card_one q (boolToF4 s) i (boolToF4_mem_alphabet_of_isRestricted h s))).choose
+      have hcard : (N.transition (q, boolToF4 s, i)).card = 1 :=
+        h.h_card_one q (boolToF4 s) i (boolToF4_mem_alphabet_of_isRestricted h s)
+      have hr' : r' ∈ N.transition (q, boolToF4 s, i) :=
+        (card_eq_one_unique_mem (N.transition (q, boolToF4 s, i)) hcard).choose_spec.1
       have h_write_im : F4.im r'.writeSym = false :=
-        (N.h_projection_constraint q (boolToF4 s) 0
-          (boolToF4_mem_alphabet_of_isCBTM0 h0 s) (boolToF4_im_false s)).2 r' hr'
-      have h_trans : M.transition (q, s) =
+        (N.h_projection_constraint q (boolToF4 s) i
+          (boolToF4_mem_alphabet_of_isRestricted h s) (boolToF4_im_false s)).2 r' hr'
+      have h_trans : M.transition (q, s, i) =
           ClassicDTMTransitionResult.mk r'.nextState (f4ToBool r'.writeSym) r'.moveDir := by
-        change CBTM.toClassicDTMTrans N h0 (q, s) =
+        change CBTM.toClassicDTMTrans N h (q, s, i) =
           ClassicDTMTransitionResult.mk r'.nextState (f4ToBool r'.writeSym) r'.moveDir
         unfold CBTM.toClassicDTMTrans
         dsimp
       simp only [hφ_val, h_trans]
-      have h_pos_indep : N.transition (q, boolToF4 s, i) = N.transition (q, boolToF4 s, 0) :=
-        h0.pos_indep q (boolToF4 s) i 0 (boolToF4_mem_alphabet_of_isCBTM0 h0 s)
-      rw [h_pos_indep]
-      rw [eq_singleton_choose_of_card_eq_one (N.transition (q, boolToF4 s, 0)) hcard]
+      rw [eq_singleton_choose_of_card_eq_one (N.transition (q, boolToF4 s, i)) hcard]
       rw [boolToF4_f4ToBool_of_im_false r'.writeSym h_write_im]
   }⟩⟩
 

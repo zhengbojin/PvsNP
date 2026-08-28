@@ -104,7 +104,7 @@ inductive DTMTapeReachablePath (M : ClassicDTM) (input : List Bool) :
       DTMTapeReachablePath M input π₀ cfg →
       step.fromState = cfg.state →
       step.readSym = cfg.tapeAt cfg.headPos →
-      step.result = M.transition (cfg.state, cfg.tapeAt cfg.headPos) →
+      step.result = M.transition (cfg.state, cfg.tapeAt cfg.headPos, cfg.headPos) →
       step.pos = cfg.headPos →
       DTMTapeReachablePath M input (π₀ ++ [step]) (DTMStepCfg cfg step.result)
 
@@ -130,10 +130,11 @@ def IsNP_classic (K : BoolLanguage) : Prop :=
 -- 3. CBTM|₀ 类（论文 P_cb 的语言形态：投影接受语义）
 -- ======================================================================
 
-/-- CBTM|₀ 判定的 Bool 语言：存在 IsCBTM0 机器，投影接受语义（∃ w 实部 = x 且接受）。
-    「CBTM|₀ ≡ₚₒₗy DTM」的语言层形态：CBTM|₀ 与经典 DTM 判定同一 Bool 语言类。 -/
+/-- CBTM|₀ 判定的 Bool 语言：存在受限 CBTM 机器，投影接受语义（∃ w 实部 = x 且接受）。
+    「CBTM|₀ ≡ₚₒₗy DTM」的语言层形态：受限 CBTM 与经典 DTM 是同一模型
+    （转移均为 (q, s, i)，i = 读写头位置；仅符号载体不同：F4{0,1} ↔ Bool）。 -/
 def IsP_cb0 (K : BoolLanguage) : Prop :=
-  ∃ N : CBTM, IsCBTM0 N ∧
+  ∃ N : CBTM, CBTM.IsRestricted N ∧
     ∀ x : List Bool, (∃ w : List F4, realProject w = x ∧ N.tapeAccepts w) ↔ K x
 
 -- ======================================================================
@@ -174,7 +175,7 @@ lemma restricted_step_read_im_false (M : CBTM) (hrest : IsRestricted M) (w : Lis
     (π : ComputationPath) (cfg : CBTMConfig M w) (hr : TapeReachablePath M w π cfg) :
     ∀ step ∈ π, F4.im step.readSym = false := by
   intro step hstep
-  exact hrest.h_alphabet_im_false step.readSym
+  exact isRestricted_im_false hrest step.readSym
     (restricted_step_read_in_alphabet M hrest w π cfg hr step hstep)
 
 /-- 初始磁带对应：若 w 在位置 i 的初始值虚部 false，则 embed(Re w) 与 w 的初始值相同。 -/
@@ -347,23 +348,24 @@ lemma dtm_accepts_to_cbtm (M : ClassicDTM) (x : List Bool) :
   dsimp [dtmCfgToCBTM]
   exact hacc
 
-/-- CBTM0 配置 → toClassicDTM 配置：磁带逐格投影实部。 -/
-def cbtm0CfgToDTM (N : CBTM) (h0 : IsCBTM0 N) {x : List Bool}
-    (cfg : CBTMConfig N (embedBool x)) : DTMCfg (N.toClassicDTM h0) x :=
+/-- 受限 CBTM 配置 → toClassicDTM 配置：磁带逐格投影实部。 -/
+def cbtm0CfgToDTM (N : CBTM) (hrest : CBTM.IsRestricted N) {x : List Bool}
+    (cfg : CBTMConfig N (embedBool x)) : DTMCfg (N.toClassicDTM hrest) x :=
   { state := cfg.state, tape := fun i => (cfg.tape i).1, headPos := cfg.headPos }
 
-/-- CBTM0 路径（embed 输入）→ toClassicDTM 路径（接受保持）。
-    关键：CBTM0 读的符号 ∈ {zero, one}（虚部 false），实部投影即 Bool 符号。 -/
-lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
+/-- 受限 CBTM 路径（embed 输入）→ toClassicDTM 路径（接受保持；长度保持）。
+    关键：受限机器读的符号 ∈ {zero, one}（虚部 false），实部投影即 Bool 符号；
+    转移逐点对应 (q, s, i) ↦ (q, s, i)——同一模型，无位置无关化。 -/
+lemma cbtm0_path_to_dtm (N : CBTM) (hrest : CBTM.IsRestricted N) :
     ∀ (x : List Bool) (π : ComputationPath) (cfg : CBTMConfig N (embedBool x)),
       TapeReachablePath N (embedBool x) π cfg →
-      ∃ π' : DTMPath, ∃ cfg' : DTMCfg (N.toClassicDTM h0) x,
-        DTMTapeReachablePath (N.toClassicDTM h0) x π' cfg' ∧
-        cfg' = cbtm0CfgToDTM N h0 cfg := by
+      ∃ π' : DTMPath, ∃ cfg' : DTMCfg (N.toClassicDTM hrest) x,
+        DTMTapeReachablePath (N.toClassicDTM hrest) x π' cfg' ∧
+        cfg' = cbtm0CfgToDTM N hrest cfg ∧ π'.length = π.length := by
   intro x π cfg hr
   induction hr with
   | nil =>
-      refine ⟨[], DTMInitialCfg (N.toClassicDTM h0) x, DTMTapeReachablePath.nil, ?_⟩
+      refine ⟨[], DTMInitialCfg (N.toClassicDTM hrest) x, DTMTapeReachablePath.nil, ?_, rfl⟩
       unfold cbtm0CfgToDTM DTMInitialCfg initialConfig DTMInitialTape embedBool
       congr
       · funext i
@@ -372,7 +374,7 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         · rw [CBTM.toClassicDTM]
           simp [initialTapeOf, h, boolToF4]
   | cons π₀ step cfg₀ hrc hfrom hread htrans ih =>
-      rcases ih with ⟨π', cfg', hrc', hcfg'⟩
+      rcases ih with ⟨π', cfg', hrc', hcfg', hlen⟩
       have hmem : step.readSym ∈ N.alphabet := by
         by_contra hnot
         have hempty : N.transition (cfg₀.state, step.readSym, cfg₀.headPos) = ∅ :=
@@ -381,14 +383,7 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
           simpa [hfrom, ← hread] using htrans
         rw [hempty] at hmem'
         simpa using hmem'
-      have him : F4.im step.readSym = false := by
-        rw [h0.alphabet_eq] at hmem
-        simp only [Finset.mem_insert, Finset.mem_singleton] at hmem
-        rcases hmem with hz | ho
-        · rw [hz]
-          rfl
-        · rw [ho]
-          rfl
+      have him : F4.im step.readSym = false := isRestricted_im_false hrest step.readSym hmem
       let step' : DTMStep := {
         fromState := step.fromState,
         readSym := step.readSym.1,
@@ -396,7 +391,7 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         result := ClassicDTMTransitionResult.mk step.result.nextState
           step.result.writeSym.1 step.result.moveDir }
       refine ⟨π' ++ [step'], DTMStepCfg cfg' step'.result,
-        DTMTapeReachablePath.cons π' step' cfg' hrc' ?_ ?_ ?_ ?_, ?_⟩
+        DTMTapeReachablePath.cons π' step' cfg' hrc' ?_ ?_ ?_ ?_, ?_, ?_⟩
       · dsimp [step']
         rw [hfrom]
         rw [hcfg']
@@ -406,50 +401,46 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         dsimp [cbtm0CfgToDTM]
         change step.readSym.1 = (cfg₀.tapeAt cfg₀.headPos).1
         rw [hread]
-      · -- 转移：toClassicDTM 转移 = 单元素 choose = step.result
+      · -- 转移：toClassicDTM 转移（同位置） = 单元素 choose = step.result
         dsimp [step']
         rw [hcfg']
         have hmem0 : step.result ∈ N.transition (cfg₀.state, step.readSym, cfg₀.headPos) := by
           simpa [hfrom, ← hread] using htrans
         have hcard : (N.transition (cfg₀.state, step.readSym, cfg₀.headPos)).card = 1 :=
-          h0.card_one cfg₀.state step.readSym cfg₀.headPos hmem
-        have hpos0 : N.transition (cfg₀.state, step.readSym, 0) =
-            N.transition (cfg₀.state, step.readSym, cfg₀.headPos) :=
-          h0.pos_indep cfg₀.state step.readSym 0 cfg₀.headPos hmem
+          hrest.h_card_one cfg₀.state step.readSym cfg₀.headPos hmem
         have hres : step.result =
             (card_eq_one_unique_mem (N.transition (cfg₀.state, step.readSym, cfg₀.headPos)) hcard).choose :=
           (card_eq_one_unique_mem (N.transition (cfg₀.state, step.readSym, cfg₀.headPos)) hcard).choose_spec.2
             step.result hmem0
         change ClassicDTMTransitionResult.mk step.result.nextState step.result.writeSym.1 step.result.moveDir =
-          (N.toClassicDTM h0).transition (cfg₀.state, (cfg₀.tapeAt cfg₀.headPos).1)
+          (N.toClassicDTM hrest).transition (cfg₀.state, (cfg₀.tapeAt cfg₀.headPos).1, cfg₀.headPos)
         rw [← hread]
         change ClassicDTMTransitionResult.mk step.result.nextState step.result.writeSym.1 step.result.moveDir =
-          (N.toClassicDTM h0).transition (cfg₀.state, step.readSym.1)
+          (N.toClassicDTM hrest).transition (cfg₀.state, step.readSym.1, cfg₀.headPos)
         unfold CBTM.toClassicDTM
         change ClassicDTMTransitionResult.mk step.result.nextState step.result.writeSym.1 step.result.moveDir =
           ClassicDTMTransitionResult.mk
-            (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, 0))
-              (h0.card_one cfg₀.state (boolToF4 step.readSym.1) 0
-                (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym.1))).choose.nextState
-            (f4ToBool (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, 0))
-              (h0.card_one cfg₀.state (boolToF4 step.readSym.1) 0
-                (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym.1))).choose.writeSym)
-            (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, 0))
-              (h0.card_one cfg₀.state (boolToF4 step.readSym.1) 0
-                (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym.1))).choose.moveDir
+            (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, cfg₀.headPos))
+              (hrest.h_card_one cfg₀.state (boolToF4 step.readSym.1) cfg₀.headPos
+                (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym.1))).choose.nextState
+            (f4ToBool (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, cfg₀.headPos))
+              (hrest.h_card_one cfg₀.state (boolToF4 step.readSym.1) cfg₀.headPos
+                (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym.1))).choose.writeSym)
+            (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, cfg₀.headPos))
+              (hrest.h_card_one cfg₀.state (boolToF4 step.readSym.1) cfg₀.headPos
+                (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym.1))).choose.moveDir
         have hb2 : boolToF4 step.readSym.1 = step.readSym := by
           rw [← boolToF4_f4ToBool_of_im_false step.readSym him]
           rfl
         have hres2 : step.result =
-            (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, 0))
-              (h0.card_one cfg₀.state (boolToF4 step.readSym.1) 0
-                (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym.1))).choose := by
-          -- choose 唯一性：step.result 是成员且集单元素
-          apply (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, 0))
-            (h0.card_one cfg₀.state (boolToF4 step.readSym.1) 0
-              (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym.1))).choose_spec.2
+            (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, cfg₀.headPos))
+              (hrest.h_card_one cfg₀.state (boolToF4 step.readSym.1) cfg₀.headPos
+                (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym.1))).choose := by
+          -- choose 唯一性：step.result 是成员且集单元素（同位置，无需位置无关）
+          apply (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym.1, cfg₀.headPos))
+            (hrest.h_card_one cfg₀.state (boolToF4 step.readSym.1) cfg₀.headPos
+              (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym.1))).choose_spec.2
           rw [hb2]
-          rw [hpos0]
           exact hmem0
         simp [← hres2, f4ToBool]
       · rw [hcfg']
@@ -463,46 +454,47 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
           · funext i
             by_cases hi : i = cfg₀.headPos <;> simp [hi]
           · rfl
+      · -- 长度保持：π'.length = π.length（归纳 hlen）
+        simp [List.length_append, hlen]
 
-/-- CBTM0 接受（embed 输入）⟹ toClassicDTM 接受。 -/
-lemma cbtm0_accepts_to_dtm (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
-    N.tapeAccepts (embedBool x) → (N.toClassicDTM h0).acceptsTape x := by
+/-- 受限 CBTM 接受（embed 输入）⟹ toClassicDTM 接受。 -/
+lemma cbtm0_accepts_to_dtm (N : CBTM) (hrest : CBTM.IsRestricted N) (x : List Bool) :
+    N.tapeAccepts (embedBool x) → (N.toClassicDTM hrest).acceptsTape x := by
   intro ⟨π, cfg, hr, hacc⟩
-  rcases cbtm0_path_to_dtm N h0 x π cfg hr with ⟨π', cfg', hrc', hcfg'⟩
+  rcases cbtm0_path_to_dtm N hrest x π cfg hr with ⟨π', cfg', hrc', hcfg', _hlen⟩
   refine ⟨π', cfg', hrc', ?_⟩
   rw [hcfg']
   dsimp [cbtm0CfgToDTM]
   exact hacc
 
-/-- M.toCBTM 是 CBTM0。 -/
-lemma toCBTM_isCBTM0 (M : ClassicDTM) : IsCBTM0 (M.toCBTM) := by
+/-- M.toCBTM 是受限 CBTM（字母表 = {zero, one}、无分支；位置参数原样传递）。 -/
+lemma toCBTM_isRestricted (M : ClassicDTM) : CBTM.IsRestricted (M.toCBTM) := by
   refine ⟨rfl, ?_, ?_⟩
   · intro q s i hs
     have hcases : s = F4.zero ∨ s = F4.one := by
       simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
     rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
-  · intro q s i j hs
-    rfl
+  · cases M.blankSym <;> simp [ClassicDTM.toCBTM, boolToF4, F4.zero, F4.one]
 
-/-- 转移相等：(M.toCBTM.toClassicDTM) 的转移 = M 的转移（choose 唯一成员 + 提升恒等）。 -/
-lemma toClassicDTM_of_toCBTM_trans (M : ClassicDTM) (q : ℕ) (b : Bool) :
-    (M.toCBTM.toClassicDTM (toCBTM_isCBTM0 M)).transition (q, b) = M.transition (q, b) := by
-  have hcard : (M.toCBTM.transition (q, boolToF4 b, 0)).card = 1 :=
-    (toCBTM_isCBTM0 M).card_one q (boolToF4 b) 0
-      (boolToF4_mem_alphabet_of_isCBTM0 (toCBTM_isCBTM0 M) b)
-  have hch : (card_eq_one_unique_mem (M.toCBTM.transition (q, boolToF4 b, 0)) hcard).choose =
-      { nextState := (M.transition (q, b)).nextState,
-        writeSym := boolToF4 (M.transition (q, b)).writeSym,
-        moveDir := (M.transition (q, b)).move } := by
-    exact ((card_eq_one_unique_mem (M.toCBTM.transition (q, boolToF4 b, 0)) hcard).choose_spec.2
-      { nextState := (M.transition (q, b)).nextState,
-        writeSym := boolToF4 (M.transition (q, b)).writeSym,
-        moveDir := (M.transition (q, b)).move } (by
+/-- 转移相等：(M.toCBTM.toClassicDTM) 的转移 = M 的转移（choose 唯一成员 + 提升恒等；同位置）。 -/
+lemma toClassicDTM_of_toCBTM_trans (M : ClassicDTM) (q : ℕ) (b : Bool) (i : ℤ) :
+    (M.toCBTM.toClassicDTM (toCBTM_isRestricted M)).transition (q, b, i) = M.transition (q, b, i) := by
+  have hcard : (M.toCBTM.transition (q, boolToF4 b, i)).card = 1 :=
+    (toCBTM_isRestricted M).h_card_one q (boolToF4 b) i
+      (boolToF4_mem_alphabet_of_isRestricted (toCBTM_isRestricted M) b)
+  have hch : (card_eq_one_unique_mem (M.toCBTM.transition (q, boolToF4 b, i)) hcard).choose =
+      { nextState := (M.transition (q, b, i)).nextState,
+        writeSym := boolToF4 (M.transition (q, b, i)).writeSym,
+        moveDir := (M.transition (q, b, i)).move } := by
+    exact ((card_eq_one_unique_mem (M.toCBTM.transition (q, boolToF4 b, i)) hcard).choose_spec.2
+      { nextState := (M.transition (q, b, i)).nextState,
+        writeSym := boolToF4 (M.transition (q, b, i)).writeSym,
+        moveDir := (M.transition (q, b, i)).move } (by
           cases b <;> simp [ClassicDTM.toCBTM, ClassicDTM.toCBTMTrans_zero, ClassicDTM.toCBTMTrans_one])).symm
   unfold CBTM.toClassicDTM
   dsimp [CBTM.toClassicDTMTrans]
-  rw [choose_eq_of_card_one (M.toCBTM.transition (q, boolToF4 b, 0))
-    ((toCBTM_isCBTM0 M).card_one q (boolToF4 b) 0 (boolToF4_mem_alphabet_of_isCBTM0 (toCBTM_isCBTM0 M) b)) hcard]
+  rw [choose_eq_of_card_one (M.toCBTM.transition (q, boolToF4 b, i))
+    ((toCBTM_isRestricted M).h_card_one q (boolToF4 b) i (boolToF4_mem_alphabet_of_isRestricted (toCBTM_isRestricted M) b)) hcard]
   rw [hch]
   cases b <;> simp [f4ToBool, boolToF4]
 
@@ -510,7 +502,7 @@ lemma toClassicDTM_of_toCBTM_trans (M : ClassicDTM) (q : ℕ) (b : Bool) :
 lemma dtm_replay_of_trans_eq {M1 M2 : ClassicDTM}
     (hstart : M1.startState = M2.startState)
     (hblank : M1.blankSym = M2.blankSym)
-    (h : ∀ q b, M1.transition (q, b) = M2.transition (q, b)) :
+    (h : ∀ q b i, M1.transition (q, b, i) = M2.transition (q, b, i)) :
     ∀ (x : List Bool) (π : DTMPath) (cfg : DTMCfg M1 x),
       DTMTapeReachablePath M1 x π cfg →
       ∃ cfg' : DTMCfg M2 x,
@@ -541,7 +533,7 @@ lemma dtm_replay_of_trans_eq {M1 M2 : ClassicDTM}
       · rw [hst']
         rw [hhp']
         rw [hta]
-        exact htrans.trans (h (cfg₀.state) (cfg₀.tapeAt cfg₀.headPos))
+        exact htrans.trans (h (cfg₀.state) (cfg₀.tapeAt cfg₀.headPos) cfg₀.headPos)
       · rw [hhp']
         exact hpos
       · dsimp [DTMStepCfg]
@@ -560,7 +552,7 @@ lemma dtm_accepts_of_trans_eq {M1 M2 : ClassicDTM}
     (hstart : M1.startState = M2.startState)
     (hblank : M1.blankSym = M2.blankSym)
     (haccs : M1.acceptStates = M2.acceptStates)
-    (h : ∀ q b, M1.transition (q, b) = M2.transition (q, b)) (x : List Bool) :
+    (h : ∀ q b i, M1.transition (q, b, i) = M2.transition (q, b, i)) (x : List Bool) :
     M1.acceptsTape x → M2.acceptsTape x := by
   intro ⟨π, cfg, hr, hacc⟩
   rcases dtm_replay_of_trans_eq hstart hblank h x π cfg hr with ⟨cfg', hr', hst', _hhp, _htape⟩
@@ -569,36 +561,37 @@ lemma dtm_accepts_of_trans_eq {M1 M2 : ClassicDTM}
   rw [← haccs]
   exact hacc
 
-/-- toCBTM 接受（embed 输入）⟹ DTM 接受（反向：toCBTM 是 CBTM0）。 -/
+/-- toCBTM 接受（embed 输入）⟹ DTM 接受（反向：toCBTM 是受限 CBTM）。 -/
 lemma cbtm_accepts_embed_to_dtm (M : ClassicDTM) (x : List Bool) :
     (M.toCBTM).tapeAccepts (embedBool x) → M.acceptsTape x := by
   intro h
-  have h1 := cbtm0_accepts_to_dtm (M.toCBTM) (toCBTM_isCBTM0 M) x h
-  exact @dtm_accepts_of_trans_eq (M.toCBTM.toClassicDTM (toCBTM_isCBTM0 M)) M
+  have h1 := cbtm0_accepts_to_dtm (M.toCBTM) (toCBTM_isRestricted M) x h
+  exact @dtm_accepts_of_trans_eq (M.toCBTM.toClassicDTM (toCBTM_isRestricted M)) M
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM, boolToF4])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
-    (fun q b => toClassicDTM_of_toCBTM_trans M q b) x h1
+    (fun q b i => toClassicDTM_of_toCBTM_trans M q b i) x h1
 
 -- ======================================================================
 -- 6. 参数化等价定理（P 方向）：IsP_cb0 = IsP_classic
 -- ======================================================================
 
 /-- DTM 配置 → N 配置：磁带逐格提升为 boolToF4（与 dtmCfgToCBTM 同构，目标为 N）。 -/
-def dtmCfgToCBTM0 (N : CBTM) (h0 : IsCBTM0 N) {x : List Bool}
-    (cfg : DTMCfg (N.toClassicDTM h0) x) : CBTMConfig N (embedBool x) :=
+def dtmCfgToCBTM0 (N : CBTM) (hrest : CBTM.IsRestricted N) {x : List Bool}
+    (cfg : DTMCfg (N.toClassicDTM hrest) x) : CBTMConfig N (embedBool x) :=
   { state := cfg.state, tape := fun i => boolToF4 (cfg.tape i), headPos := cfg.headPos }
 
-/-- DTM 路径（toClassicDTM）→ N 路径（embed 输入；接受保持的反向方向）。 -/
-lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
-    ∀ (x : List Bool) (π : DTMPath) (cfg : DTMCfg (N.toClassicDTM h0) x),
-      DTMTapeReachablePath (N.toClassicDTM h0) x π cfg →
+/-- DTM 路径（toClassicDTM）→ N 路径（embed 输入；接受保持的反向方向；长度保持）。 -/
+lemma dtm_path_to_cbtm0 (N : CBTM) (hrest : CBTM.IsRestricted N) :
+    ∀ (x : List Bool) (π : DTMPath) (cfg : DTMCfg (N.toClassicDTM hrest) x),
+      DTMTapeReachablePath (N.toClassicDTM hrest) x π cfg →
       ∃ π' : ComputationPath, ∃ cfg' : CBTMConfig N (embedBool x),
-        TapeReachablePath N (embedBool x) π' cfg' ∧ cfg' = dtmCfgToCBTM0 N h0 cfg := by
+        TapeReachablePath N (embedBool x) π' cfg' ∧ cfg' = dtmCfgToCBTM0 N hrest cfg ∧
+        π'.length = π.length := by
   intro x π cfg hr
   induction hr with
   | nil =>
-      refine ⟨[], initialConfig N (embedBool x), TapeReachablePath.nil, ?_⟩
+      refine ⟨[], initialConfig N (embedBool x), TapeReachablePath.nil, ?_, rfl⟩
       unfold dtmCfgToCBTM0 DTMInitialCfg initialConfig DTMInitialTape embedBool
       congr
       · funext i
@@ -606,26 +599,19 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
         · simp [initialTapeOf, h, embedBool, List.getElem_map, boolToF4]
         · rw [CBTM.toClassicDTM]
           simp [initialTapeOf, h]
-          -- 空白区：N.blankSym 虚部 false（alphabet = {zero, one}）
-          have hbim : F4.im N.blankSym = false := by
-            have hb : N.blankSym ∈ N.alphabet := N.h_blank_in_alphabet
-            rw [h0.alphabet_eq] at hb
-            simp at hb
-            rcases hb with hb1 | hb2
-            · rw [hb1]
-              rfl
-            · rw [hb2]
-              rfl
+          -- 空白区：N.blankSym 虚部 false（受限机器）
+          have hbim : F4.im N.blankSym = false :=
+            isRestricted_im_false hrest N.blankSym N.h_blank_in_alphabet
           rw [← boolToF4_f4ToBool_of_im_false N.blankSym hbim]
           rfl
   | cons π₀ step cfg₀ hrc hfrom hread htrans hpos ih =>
-      rcases ih with ⟨π', cfg', hrc', hcfg'⟩
+      rcases ih with ⟨π', cfg', hrc', hcfg', hlen⟩
       let step' : TransitionStep := {
         fromState := step.fromState,
         readSym := boolToF4 step.readSym,
         result := CBTMTransResult.mk step.result.nextState (boolToF4 step.result.writeSym) step.result.move }
       refine ⟨π' ++ [step'], stepConfig cfg' step'.result,
-        TapeReachablePath.cons π' step' cfg' hrc' ?_ ?_ ?_, ?_⟩
+        TapeReachablePath.cons π' step' cfg' hrc' ?_ ?_ ?_, ?_, ?_⟩
       · dsimp [step']
         rw [hfrom]
         rw [hcfg']
@@ -634,7 +620,7 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
         rw [hcfg']
         change boolToF4 step.readSym = boolToF4 (cfg₀.tapeAt cfg₀.headPos)
         rw [hread]
-      · -- 转移：htrans（toClassicDTM 转移的等式）+ choose 成员 + 位置无关
+      · -- 转移：htrans（toClassicDTM 转移的等式）+ choose 成员（同位置）
         dsimp [step']
         rw [hcfg']
         change CBTMTransResult.mk step.result.nextState (boolToF4 step.result.writeSym) step.result.move ∈
@@ -644,22 +630,18 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
         rw [← hread] at htrans
         unfold CBTM.toClassicDTM at htrans
         dsimp [CBTM.toClassicDTMTrans] at htrans
-        let ch := (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym, 0))
-          (h0.card_one cfg₀.state (boolToF4 step.readSym) 0
-            (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym))).choose
+        let ch := (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym, cfg₀.headPos))
+          (hrest.h_card_one cfg₀.state (boolToF4 step.readSym) cfg₀.headPos
+            (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym))).choose
         -- 写符号虚部 false（投影约束：读符号虚部 false）
-        have hproj := N.h_projection_constraint cfg₀.state (boolToF4 step.readSym) 0
-          (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym) (by simp [boolToF4])
-        have hch_mem : ch ∈ N.transition (cfg₀.state, boolToF4 step.readSym, 0) := by
+        have hproj := N.h_projection_constraint cfg₀.state (boolToF4 step.readSym) cfg₀.headPos
+          (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym) (by simp [boolToF4])
+        have hch_mem : ch ∈ N.transition (cfg₀.state, boolToF4 step.readSym, cfg₀.headPos) := by
           dsimp [ch]
-          exact (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym, 0))
-            (h0.card_one cfg₀.state (boolToF4 step.readSym) 0
-              (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym))).choose_spec.1
+          exact (card_eq_one_unique_mem (N.transition (cfg₀.state, boolToF4 step.readSym, cfg₀.headPos))
+            (hrest.h_card_one cfg₀.state (boolToF4 step.readSym) cfg₀.headPos
+              (boolToF4_mem_alphabet_of_isRestricted hrest step.readSym))).choose_spec.1
         have hch_im : F4.im ch.writeSym = false := hproj.2 ch hch_mem
-        have hpos1 : N.transition (cfg₀.state, boolToF4 step.readSym, 0) =
-            N.transition (cfg₀.state, boolToF4 step.readSym, cfg₀.headPos) :=
-          h0.pos_indep cfg₀.state (boolToF4 step.readSym) 0 cfg₀.headPos
-            (boolToF4_mem_alphabet_of_isCBTM0 h0 step.readSym)
         -- 目标：mk step.result.nextState (boolToF4 step.result.writeSym) step.result.move ∈
         --   transition (q, boolToF4 step.readSym, headPos)
         -- 用 htrans（step.result = mk ch.nextState (f4ToBool ch.writeSym) ch.moveDir）替换：
@@ -669,8 +651,7 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
         have hbw : boolToF4 (f4ToBool ch.writeSym) = ch.writeSym :=
           boolToF4_f4ToBool_of_im_false ch.writeSym hch_im
         rw [hbw]
-        rw [← hpos1]
-        -- 目标：ch ∈ transition (q, boolToF4 step.readSym, 0)
+        -- 目标：ch ∈ transition (q, boolToF4 step.readSym, headPos)
         exact hch_mem
       · rw [hcfg']
         dsimp [dtmCfgToCBTM0, step', DTMStepCfg, stepConfig]
@@ -679,12 +660,14 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
           by_cases hi : i = cfg₀.headPos
           · simp [hi]
           · simp [hi]
+      · -- 长度保持：π'.length = π.length（归纳 hlen）
+        simp [List.length_append, hlen]
 
 /-- toClassicDTM 接受 ⟹ N 接受（embed 输入；反向接受保持）。 -/
-lemma dtm_accepts_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
-    (N.toClassicDTM h0).acceptsTape x → N.tapeAccepts (embedBool x) := by
+lemma dtm_accepts_to_cbtm0 (N : CBTM) (hrest : CBTM.IsRestricted N) (x : List Bool) :
+    (N.toClassicDTM hrest).acceptsTape x → N.tapeAccepts (embedBool x) := by
   intro ⟨π, cfg, hr, hacc⟩
-  rcases dtm_path_to_cbtm0 N h0 x π cfg hr with ⟨π', cfg', hrc', hcfg'⟩
+  rcases dtm_path_to_cbtm0 N hrest x π cfg hr with ⟨π', cfg', hrc', hcfg', _hlen⟩
   refine ⟨π', cfg', hrc', ?_⟩
   rw [hcfg']
   dsimp [dtmCfgToCBTM0]
@@ -695,78 +678,41 @@ lemma dtm_accepts_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
     ⟺ D 接受 x（接受保持）。 -/
 theorem IsP_classic_subset_IsP_cb0 (K : BoolLanguage) (hP : IsP_classic K) : IsP_cb0 K := by
   rcases hP with ⟨D, hD⟩
-  refine ⟨D.toCBTM, ?_, ?_⟩
-  · refine ⟨rfl, ?_, ?_⟩
-    · intro q s i hs
-      have hcases : s = F4.zero ∨ s = F4.one := by
-        simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
-      rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
-    · intro q s i j hs
-      rfl
-  · intro x
-    constructor
-    · intro hproj
-      rcases hproj with ⟨w, hw, hacc⟩
-      have hrest : IsRestricted (D.toCBTM) := by
-        refine ⟨?_, ?_, ?_, ?_⟩
-        · intro s hs
-          have hcases : s = F4.zero ∨ s = F4.one := by
-            simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
-          rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
-        · intro s hs
-          have hcases : s = F4.zero ∨ s = F4.one := by
-            simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
-          rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
-        · intro q s i hs
-          have hcases : s = F4.zero ∨ s = F4.one := by
-            simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
-          rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
-        · cases D.blankSym <;> simp [ClassicDTM.toCBTM, boolToF4, F4.zero, F4.one]
-      have hembed : (D.toCBTM).tapeAccepts (embedBool (realProject w)) :=
-        restricted_tapeAccepts_of_embed (D.toCBTM) hrest w hacc
-      have hwx : embedBool (realProject w) = embedBool x := by rw [hw]
-      rw [hwx] at hembed
-      exact (hD x).1 (cbtm_accepts_embed_to_dtm D x hembed)
-    · intro hx
-      have haccD : D.acceptsTape x := (hD x).2 hx
-      refine ⟨embedBool x, realProject_embedBool x, dtm_accepts_to_cbtm D x haccD⟩
+  refine ⟨D.toCBTM, toCBTM_isRestricted D, ?_⟩
+  intro x
+  constructor
+  · intro hproj
+    rcases hproj with ⟨w, hw, hacc⟩
+    have hrest : IsRestricted (D.toCBTM) := toCBTM_isRestricted D
+    have hembed : (D.toCBTM).tapeAccepts (embedBool (realProject w)) :=
+      restricted_tapeAccepts_of_embed (D.toCBTM) hrest w hacc
+    have hwx : embedBool (realProject w) = embedBool x := by rw [hw]
+    rw [hwx] at hembed
+    exact (hD x).1 (cbtm_accepts_embed_to_dtm D x hembed)
+  · intro hx
+    have haccD : D.acceptsTape x := (hD x).2 hx
+    refine ⟨embedBool x, realProject_embedBool x, dtm_accepts_to_cbtm D x haccD⟩
 
 /-- CBTM|₀ 判定 ⟹ 经典 DTM 判定。
     投影接受 x ⟺ N 接受 embed x（重放：受限 N 的接受串投影 = 嵌入接受）
     ⟺ (N.toClassicDTM) 接受 x（接受保持）。 -/
 theorem IsP_cb0_subset_IsP_classic (K : BoolLanguage) (hP : IsP_cb0 K) : IsP_classic K := by
-  rcases hP with ⟨N, h0, hN⟩
-  refine ⟨N.toClassicDTM h0, ?_⟩
+  rcases hP with ⟨N, hrest, hN⟩
+  refine ⟨N.toClassicDTM hrest, ?_⟩
   intro x
   constructor
   · intro hacc
     -- D 接受 x → N 接受 embed x（反向接受保持）→ 投影接受（w = embed x）→ x ∈ K
-    have hNacc : N.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm0 N h0 x hacc
+    have hNacc : N.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm0 N hrest x hacc
     exact (hN x).1 ⟨embedBool x, realProject_embedBool x, hNacc⟩
   · intro hx
     have hproj := (hN x).2 hx
     rcases hproj with ⟨w, hw, hacc⟩
-    have hrest : IsRestricted N := by
-      refine ⟨?_, ?_, ?_, ?_⟩
-      · intro s hs
-        rw [h0.alphabet_eq] at hs
-        simpa [Finset.mem_insert, Finset.mem_singleton] using hs
-      · intro s hs
-        rw [h0.alphabet_eq] at hs
-        simp at hs
-        rcases hs with hz | ho
-        · rw [hz]
-          rfl
-        · rw [ho]
-          rfl
-      · intro q s i hs
-        exact h0.card_one q s i hs
-      · exact N.h_blank_in_alphabet
     have hembed : N.tapeAccepts (embedBool (realProject w)) :=
       restricted_tapeAccepts_of_embed N hrest w hacc
     have hwx : embedBool (realProject w) = embedBool x := by rw [hw]
     rw [hwx] at hembed
-    exact cbtm0_accepts_to_dtm N h0 x hembed
+    exact cbtm0_accepts_to_dtm N hrest x hembed
 
 /-- 参数化等价定理（P 方向，论文 thm:equivalence(1) 的语言层形态）：
     P_cb0 = P_classic —— CBTM|₀ 与经典 DTM 的外延等价（CBTM 不引入超计算能力）。 -/
@@ -779,5 +725,135 @@ theorem P_cb0_eq_P_classic :
     exact IsP_cb0_subset_IsP_classic K h
   · intro h
     exact IsP_classic_subset_IsP_cb0 K h
+
+-- ======================================================================
+-- 7. 经典多项式 P 类：P_Bool = 经典 P（时间对接）
+-- ======================================================================
+
+/-- 经典 DTM 的多项式时间（实化，与 CBTM.isPolynomialTime 同形态）：
+    存在多项式界 p，任意接受路径长度 ≤ p(输入长度)。 -/
+def ClassicDTM.isPolynomialTime (M : ClassicDTM) : Prop :=
+  ∃ p : ℕ → ℕ, IsPolynomialBound p ∧
+    ∀ x π cfg, DTMTapeReachablePath M x π cfg → cfg.state ∈ M.acceptStates →
+      π.length ≤ p x.length
+
+/-- 经典 P（多项式时间 DTM 判定 Bool 语言——传统定义）。 -/
+def IsP_classic_poly (K : BoolLanguage) : Prop :=
+  ∃ D : ClassicDTM, ClassicDTM.isPolynomialTime D ∧ (∀ x, D.acceptsTape x ↔ K x)
+
+/-- DTM 多项式时间 → toCBTM 多项式时间（接受路径 → 受限重放到 embed 输入
+    → cbtm0_path_to_dtm 同长 → dtm_replay 到 D——D 的多项式界）。 -/
+theorem toCBTM_isPolynomialTime (D : ClassicDTM) (hpoly : ClassicDTM.isPolynomialTime D) :
+    CBTM.isPolynomialTime (D.toCBTM) := by
+  rcases hpoly with ⟨p, hb, hDpoly⟩
+  refine ⟨p, hb, ?_⟩
+  intro w π cfg hr hacc
+  -- 受限重放：同一 π 在 embed (Re w) 上可达（状态保持）
+  have hrest : CBTM.IsRestricted (D.toCBTM) := toCBTM_isRestricted D
+  rcases restricted_path_replay_embed (D.toCBTM) hrest w π cfg hr
+    with ⟨cfg', hr', hst', _hhp, _htape⟩
+  have hacc' : cfg'.state ∈ (D.toCBTM).acceptStates := by
+    rw [hst']
+    exact hacc
+  -- embed (Re w) 上：映射到 toClassicDTM（同长）
+  rcases cbtm0_path_to_dtm (D.toCBTM) hrest (realProject w) π cfg' hr'
+    with ⟨π', cfg'', hr'', hcfg'', hlen⟩
+  have hacc'' : cfg''.state ∈ (D.toCBTM.toClassicDTM hrest).acceptStates := by
+    rw [hcfg'']
+    dsimp [cbtm0CfgToDTM]
+    exact hacc'
+  -- 映射到 D（转移相同，路径保持）
+  rcases dtm_replay_of_trans_eq (M1 := D.toCBTM.toClassicDTM hrest) (M2 := D)
+    (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
+    (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM, boolToF4])
+    (fun q b i => toClassicDTM_of_toCBTM_trans D q b i)
+    (realProject w) π' cfg'' hr'' with ⟨cfg''', hr''', hst''', _hhp, _htape⟩
+  have hacc''' : cfg'''.state ∈ D.acceptStates := by
+    rw [hst''']
+    exact hacc''
+  have hlen' : π'.length ≤ p (realProject w).length :=
+    hDpoly (realProject w) π' cfg''' hr''' hacc'''
+  -- π'.length = π.length（hlen）、|Re w| = |w|（map 保长）
+  simpa [hlen, realProject] using hlen'
+
+/-- 经典 P ⊆ P_Bool：多项式 DTM 判定 ⟹ 受限 CBTM 判定其嵌入提升（投影 = K）。 -/
+theorem IsP_classic_poly_subset_IsP_Bool (K : BoolLanguage) (hP : IsP_classic_poly K) :
+    IsP_Bool K := by
+  rcases hP with ⟨D, hpoly, hD⟩
+  let M : CBTM := D.toCBTM
+  let L : FLanguage := {w | M.tapeAccepts w}
+  refine ⟨L, ?_, ?_⟩
+  · -- 投影接受 ⟺ K（受限重放 + DTM 接受保持）
+    ext x
+    constructor
+    · intro hproj
+      rcases hproj with ⟨w, hw, hacc⟩
+      have hrest : CBTM.IsRestricted M := toCBTM_isRestricted D
+      have hembed : M.tapeAccepts (embedBool (realProject w)) :=
+        restricted_tapeAccepts_of_embed M hrest w hacc
+      rw [hw] at hembed
+      have hDacc : D.acceptsTape x := cbtm_accepts_embed_to_dtm D x hembed
+      exact (hD x).1 hDacc
+    · intro hx
+      have hDacc : D.acceptsTape x := (hD x).2 hx
+      have hMacc : M.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm D x hDacc
+      exact ⟨embedBool x, realProject_embedBool x, hMacc⟩
+  · -- IsP_F L：M 受限、多项式、识别 L（定义 rfl）
+    refine ⟨M, toCBTM_isRestricted D, toCBTM_isPolynomialTime D hpoly, ?_⟩
+    intro w
+    rfl
+
+/-- P_Bool ⊆ 经典 P：受限 CBTM 多项式判定其嵌入提升 ⟹ 多项式 DTM 判定。
+    转移逐点对应 (q, s, i) ↦ (q, s, i)——经典 DTM 与受限 CBTM 是同一模型，
+    i = 读写头位置（由格局 headPos 承载）。 -/
+theorem IsP_Bool_subset_IsP_classic_poly (K : BoolLanguage) (hP : IsP_Bool K) :
+    IsP_classic_poly K := by
+  rcases hP with ⟨L, hproj, hPF⟩
+  rcases hPF with ⟨M, hrest, hpolyM, hM⟩
+  let D : ClassicDTM := M.toClassicDTM hrest
+  refine ⟨D, ?_, ?_⟩
+  · -- D 多项式时间：接受路径 → M 路径（embed x，同长）→ M 的多项式界
+    rcases hpolyM with ⟨p, hb, hMpoly⟩
+    refine ⟨p, hb, ?_⟩
+    intro x π cfg hr hacc
+    rcases dtm_path_to_cbtm0 M hrest x π cfg hr with ⟨π', cfg', hrc', hcfg', hlen⟩
+    have hacc' : cfg'.state ∈ M.acceptStates := by
+      rw [hcfg']
+      dsimp [dtmCfgToCBTM0]
+      exact hacc
+    have hlen' : π'.length ≤ p (embedBool x).length :=
+      hMpoly (embedBool x) π' cfg' hrc' hacc'
+    simpa [hlen, embedBool] using hlen'
+  · -- 接受等价：D 接受 ⟺ 投影接受（经 M 的 embed 接受）⟺ K
+    intro x
+    constructor
+    · intro hDacc
+      -- D 接受 x → M 接受 embed x（反向接受保持）→ 投影接受（w = embed x）→ K x
+      have hNacc : M.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm0 M hrest x hDacc
+      have hLemb : L (embedBool x) := (hM (embedBool x)).1 hNacc
+      rw [← hproj]
+      exact ⟨embedBool x, realProject_embedBool x, hLemb⟩
+    · intro hx
+      -- K x → 投影接受 x → M 接受 embed x（受限重放）→ D 接受 x
+      have hproj_x : projectLanguage L x := by
+        rw [hproj]
+        exact hx
+      rcases hproj_x with ⟨w, hw, hacc⟩
+      have hembed : M.tapeAccepts (embedBool (realProject w)) :=
+        restricted_tapeAccepts_of_embed M hrest w ((hM w).2 hacc)
+      rw [hw] at hembed
+      exact cbtm0_accepts_to_dtm M hrest x hembed
+
+/-- P_Bool = 经典 P：双向等价（时间对接完成）。
+    (⇐) IsP_classic_poly_subset_IsP_Bool；（⇒）IsP_Bool_subset_IsP_classic_poly。 -/
+theorem P_Bool_eq_P_classic_poly :
+    {K : BoolLanguage | IsP_Bool K} = {K : BoolLanguage | IsP_classic_poly K} := by
+  apply Set.ext
+  intro K
+  constructor
+  · intro h
+    exact IsP_Bool_subset_IsP_classic_poly K h
+  · intro h
+    exact IsP_classic_poly_subset_IsP_Bool K h
 
 end PvsNP

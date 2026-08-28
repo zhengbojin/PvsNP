@@ -289,14 +289,13 @@ lemma tapeReachablePath_read_in_alphabet {M : CBTM} {x : List F4} {π : Computat
       rw [hempty] at h_trans
       simp at h_trans
 
-/-- 磁带语义：受限机器的路径读符号虚部全假（读符号 ∈ 字母表 ⊆ 实部符号）。 -/
+/-- 磁带语义：受限机器的路径读符号虚部全假（读符号 ∈ 字母表 = 实部符号）。 -/
 lemma tapeReachable_steps_im_false {M : CBTM} {x : List F4} {π : ComputationPath}
     {cfg : CBTMConfig M x} (h_rest : CBTM.IsRestricted M)
     (h : TapeReachablePath M x π cfg) :
     ∀ step ∈ π, F4.im step.readSym = false := by
-  rcases h_rest with ⟨_, h_alphabet_im_false, _, _⟩
   intro step hstep
-  exact h_alphabet_im_false step.readSym (tapeReachablePath_read_in_alphabet h step hstep)
+  exact isRestricted_im_false h_rest step.readSym (tapeReachablePath_read_in_alphabet h step hstep)
 
 theorem kappa_zero_of_restricted (M : CBTM) (x : List F4)
     (h_rest : CBTM.IsRestricted M) : kappa_M M x = 0 := by

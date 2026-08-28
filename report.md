@@ -16,7 +16,7 @@
 - 非确定性分支的"虚部"不是外部编码约定，而是**计算模型的内在语义**（数计一体：语义内建于符号）；
 - 虚部标记（α = `(false,true)`）携带**不可公度性**语义——每个标记对应一个素数平方根生成元（线性独立），构成**本质维度 κ** 的度量单位；
 - 经典 Bool 层 = F4 层的**实部投影**（压平）：虚部与语言无关，只与计算模型有关；
-- 分离（P ≠ NP）发生在**虚部语义层**（F4 层，严格可证）；**框架内经典闭合**在 CBTM 内部完成——CBTM0 逐一步模拟 DTM（维度 0 保持），选项下界（κ ≥ n）与维度 0 的矛盾传到 CBTM0（`no_dtm_recognizes_subsetSumF4`，无前提、无新公理，见 §6.5）。
+- 分离（P ≠ NP）发生在**虚部语义层**（F4 层，严格可证）；**框架内经典闭合**在 CBTM 内部完成——受限 CBTM 逐一步模拟 DTM（维度 0 保持），选项下界（κ ≥ n）与维度 0 的矛盾传到受限 CBTM（`no_dtm_recognizes_subsetSumF4`，无前提、无新公理，见 §6.5）。
 
 **交付标准**：0 `sorry`、0 error、`lake build` 通过、全部结论由单一公理 `exists_NTM2_solves_subsetSum`（公理 V6，四条款）推出。
 
@@ -46,7 +46,7 @@
 - 符号表 F4：`zero=(false,false)`、`one=(true,false)`、`alpha=(false,true)`、`beta=(true,true)`；
 - 转移位置化：`transition : ℕ × F4 × ℤ → Finset (ℕ × F4 × Dir)`（状态 × 符号 × 位置）；
 - `tapeAccepts`：磁带语义接受（存在接受路径，逐符号消费输入）；
-- `IsRestricted`：受限机器（读符号虚部全 false；读虚部 true 的符号 → 转移 ∅，`h_transition_outside` → 必然拒绝）；
+- `IsRestricted`：受限机器（字母表恰好 {zero, one}；读虚部 true 的符号 → 转移 ∅，`h_transition_outside` → 必然拒绝）；
 - **`isPolynomialTime`（已实化，非占位）**：`∃ p，多项式界 ∧ ∀ 接受路径，π.length ≤ p(|x|)`——多项式界 `IsPolynomialBound p := ∃ k, ∀ n, p n ≤ n^k + k`（定义于 CBTM.lean；实化定义于 IVM.lean，依赖磁带语义）；
 - **空白符号修正（2026-08-28）**：`ClassicDTM.toCBTM.blankSym := boolToF4 M.blankSym`（原固定 `F4.zero`）、`CBTM.toClassicDTM.blankSym := (N.blankSym).1`（原固定 `false`）——保证 DTM↔CBTM0 双向模拟的空白区匹配（DTM 空白可为 true 时原定义错位）；
 - `exists_CBTM_iso_NTM2`：`∃ M, M = NTM2.toCBTM A ∧ Nonempty (StructIsoNTM2CBTM A M)`（同构 = 路径上格局逐步相同，φ 恒等）。
@@ -105,8 +105,9 @@ def IsP_classic (K : BoolLanguage) : Prop :=      -- 经典 P（ClassicDTM 判�
   ∃ D : ClassicDTM, ∀ x : List Bool, D.acceptsTape x ↔ K x
 def IsNP_classic (K : BoolLanguage) : Prop :=     -- 经典 NP（NTM2 判定；ClassicNTM = NTM2 用户裁定）
   ∃ A : NTM2, NTM2.Canonical A ∧ ∀ x : List Bool, A.acceptsTape x ↔ K x
-def IsP_cb0 (K : BoolLanguage) : Prop :=          -- CBTM|₀（CBTM0：字母表 {zero,one} + 位置无关 + 单元素转移）
-  ∃ N : CBTM, IsCBTM0 N ∧ ∀ x, (∃ w, realProject w = x ∧ N.tapeAccepts w) ↔ K x
+def IsP_cb0 (K : BoolLanguage) : Prop :=          -- CBTM|₀（受限 CBTM：字母表 {zero,one} + 单元素转移；
+                                                  --   转移 (q,s,i)，i = 读写头位置——与经典 DTM 同一模型）
+  ∃ N : CBTM, CBTM.IsRestricted N ∧ ∀ x, (∃ w, realProject w = x ∧ N.tapeAccepts w) ↔ K x
 ```
 
 - **DTM 磁带语义**（`acceptsTape`/`DTMTapeReachablePath`）：经典确定性路径（转移 = 单值函数），参数化等价的形式化地基；
@@ -199,26 +200,40 @@ NTM2_iso_composite_language   : (∀ x, A.acceptsTape x ↔ K x) → 复合语�
 
 原公理 `NTM2_solve_implies_IsNP_F`（A2）由语言识别条款消去为定理——同构 = 任意计算路径上格局逐步相同（一一映射即恒等）。
 
-### 6.4 参数化等价定理（`ParamEquiv.lean`，783 行）
+### 6.4 参数化等价定理（`ParamEquiv.lean`，856 行）
 
 ```
-P_cb0_eq_P_classic : {K | IsP_cb0 K} = {K | IsP_classic K}        （论文 thm:equivalence(1)）
+P_cb0_eq_P_classic     : {K | IsP_cb0 K} = {K | IsP_classic K}        （论文 thm:equivalence(1)）
+P_Bool_eq_P_classic_poly : {K | IsP_Bool K} = {K | IsP_classic_poly K}  （P_Bool = 经典 P，时间对接）
 ```
+
+**模型统一（2026-08-28 用户澄清）**：经典 DTM 转移函数即 `(q, s, i)`，`(q, s)` 只是简写，i = 读写头位置（由格局 headPos 承载）——与受限 CBTM 转移 `(q, s, i)` **逐点对应，同一模型**。因此：
+
+- `ClassicDTM.transition : ℕ × Bool × ℤ → ClassicDTMTransitionResult`（三元组）；
+- `CBTM.toClassicDTM` 前提从 `IsCBTM0`（位置无关）放宽为 `CBTM.IsRestricted`（位置相关），转移逐点 choose；
+- `IsP_cb0` 的见证从 `IsCBTM0` 改为 `CBTM.IsRestricted`（受限 CBTM = 经典 DTM 的同一模型形态；`IsCBTM0` = 受限 + 位置无关，保留为引理概念）；
+- `IsRestricted` 收紧为 `alphabet = {zero, one}` 恰好（读实部符号 0/1；原 ⊆ 版本无法全定义 toClassicDTM 转移）。
 
 **证明骨架**（双向接受保持，直接构造，不经同构结构）：
 
 - **经典 ⊆ CBTM|₀**（`IsP_classic_subset_IsP_cb0`）：D 判 K → `N = D.toCBTM` 判投影 K——`D` 接受 x ⟺ `N` 接受 `embedBool x`（`dtm_path_to_cbtm`/`dtm_accepts_to_cbtm` 路径对应）⟺ 投影接受（受限不敏感：`restricted_tapeAccepts_of_embed` 重放——受限路径读符号虚部全 false，接受串在未读位置任意）⟹ `x ∈ K`（投影语义定义）；
-- **CBTM|₀ ⊆ 经典**（`IsP_cb0_subset_IsP_classic`）：N（IsCBTM0）判投影 K → `D = N.toClassicDTM h0` 判 K——投影接受 ⟹ `N` 接受 `embedBool x`（重放）⟹ `D` 接受 x（`cbtm0_path_to_dtm` 路径对应 + `dtm_replay_of_trans_eq` 转移相同重放）；反向：`dtm_path_to_cbtm0` + `cbtm0_accepts_to_dtm`；
-- **支撑引理**：`realProject_embedBool : realProject (embedBool x) = x`（`@[simp]`）、`choose_eq_of_card_one`（单元素集 choose 唯一）、`toClassicDTM_of_toCBTM_trans`（toCBTM↔toClassicDTM 转移相等）、blankSym 匹配（§2.2 修正）。
+- **CBTM|₀ ⊆ 经典**（`IsP_cb0_subset_IsP_classic`）：N（受限）判投影 K → `D = N.toClassicDTM hrest` 判 K——投影接受 ⟹ `N` 接受 `embedBool x`（重放）⟹ `D` 接受 x（`cbtm0_path_to_dtm` 路径对应 + `dtm_replay_of_trans_eq` 转移相同重放）；反向：`dtm_path_to_cbtm0`（含长度保持）+ `cbtm0_accepts_to_dtm`；
+- **支撑引理**：`realProject_embedBool : realProject (embedBool x) = x`（`@[simp]`）、`choose_eq_of_card_one`（单元素集 choose 唯一）、`toClassicDTM_of_toCBTM_trans`（toCBTM↔toClassicDTM 转移相等（同位置））、blankSym 匹配（§2.2 修正）。
 
-**意义**：CBTM|₀（受限 CBTM 的规范形态：字母表 {zero,one}、位置无关、确定性）与经典 DTM 外延等价——**CBTM 框架不引入超计算能力**，P 方向的经典-框架桥梁成立。
+**P_Bool = 经典 P（第 7 节，时间对接）**：
+
+- `ClassicDTM.isPolynomialTime`：存在多项式界 p，任意接受路径长度 ≤ p(输入长度)（与 CBTM.isPolynomialTime 同形态）；
+- `IsP_classic_poly`：经典 P（多项式 DTM 判定 Bool 语言——传统定义）；
+- **(⇐) `IsP_classic_poly_subset_IsP_Bool`**：D 判 K → `M = D.toCBTM` 判嵌入提升 L，投影接受 ⟺ K（受限重放 + DTM 接受保持）；M 多项式（`toCBTM_isPolynomialTime`：接受路径 → 受限重放到 embed 输入 → `cbtm0_path_to_dtm` 同长 → `dtm_replay_of_trans_eq` 到 D → D 的多项式界）；
+- **(⇒) `IsP_Bool_subset_IsP_classic_poly`**：受限 M + 界 p 判 L → `D = M.toClassicDTM hrest` 判 K（转移逐点对应，无需位置无关化）；D 多项式（`dtm_path_to_cbtm0` 长度保持：D 接受路径 → M 路径同长 → p 界）。
+
+**意义**：CBTM|₀（受限 CBTM：字母表 {zero,one}、确定性、转移 (q,s,i)）与经典 DTM 是**同一模型**（仅符号载体 F4{0,1} ↔ Bool 不同）——**CBTM 框架不引入超计算能力**，P 方向经典-框架桥梁成立；`P_Bool = 经典 P` 使框架的 Bool 层类与传统复杂度类严格对接。
 
 ### 6.5 框架内经典 P ≠ NP（`PNPClosure.lean`，闭合论证——无前提、无新公理）
 ```
 Verifiers_tape L          : Bool 语言验证器集合（磁带语义；isPolynomialTime + 投影识别）
 essentialDimension_tape L : Bool 语言本质维度（= 论文 κ(L)；Nat.find 最小验证器最坏维度）
 PClassZeroDimension_tape  : IsP_Bool L → essentialDimension_tape L refLen = 0（零维定理）
-isCBTM0_isRestricted      : IsCBTM0 M → IsRestricted M
 no_restricted_recognizes_subsetSumF4 :
     ¬ ∃ M, IsRestricted M ∧ (∀ w, M.tapeAccepts w ↔ subsetSumLanguageF4Real w)
 no_cbtm0_recognizes_subsetSumF4 :
@@ -227,10 +242,10 @@ dtm_sim_worstCaseDimension_zero (D) (n) :
     worstCaseDimension (D.toCBTM) n = 0                 （维度 0 保持）
 no_dtm_recognizes_subsetSumF4 :
     ¬ ∃ D : ClassicDTM, ∀ w, (D.toCBTM).tapeAccepts w ↔ subsetSumLanguageF4Real w
-    （矛盾传到 CBTM0）
+    （矛盾传到受限 CBTM）
 ```
 
-**论证形态（2026-08-28 用户裁决：无需证明 Bool 层）**：任意经典 DTM D → `D.toCBTM` 是 CBTM0（受限机器）→ κ = 0、worstCaseDimension = 0（**维度 0 保持到所有 P 算法**——CBTM0 逐一步模拟 DTM，参数化等价定理）；子集和 α 编码语言 L_F4 的任意识别者 κ ≥ 元素数（**选项下界**——代数生成元扩张（√pᵢ 线性无关）绑定元素选择，信息论：2ⁿ 个部分和需要 n 个独立维度；`subsetSum_kappa_lower_bound` 是 Lean 内定理，非公理）⟹ 不存在受限/CBTM0 机器识别 L_F4（κ ≥ 1 vs κ = 0）⟹ 不存在经典 DTM 经 toCBTM 识别 L_F4（**矛盾传到 CBTM0**）。
+**论证形态（2026-08-28 用户裁决：无需证明 Bool 层）**：任意经典 DTM D → `D.toCBTM` 是受限 CBTM（`toCBTM_isRestricted`，恒真——字母表 {zero,one}、单元素转移）→ κ = 0、worstCaseDimension = 0（**维度 0 保持到所有 P 算法**——受限 CBTM 逐一步模拟 DTM，参数化等价定理）；子集和 α 编码语言 L_F4 的任意识别者 κ ≥ 元素数（**选项下界**——代数生成元扩张（√pᵢ 线性无关）绑定元素选择，信息论：2ⁿ 个部分和需要 n 个独立维度；`subsetSum_kappa_lower_bound` 是 Lean 内定理，非公理）⟹ 不存在受限机器识别 L_F4（κ ≥ 1 vs κ = 0）⟹ 不存在经典 DTM 经 toCBTM 识别 L_F4（**矛盾传到受限 CBTM**）。
 
 **历史**：Bool 层条件闭合 `P_Bool_neq_NP_Bool`（前提 h_kappa = 论文层 κ ≥ n 下界）于 2026-08-28 取消——框架内闭合无前提、无新公理，取代之（取消记录保留在 PNPClosure.lean 注释中）。
 
@@ -248,11 +263,12 @@ no_dtm_recognizes_subsetSumF4 :
 | 编码不单射（`([1],t=3)` ≡ `([3],t=1)`） | ✅ 定理（`encodeSubsetSumF4Real_not_injective`）——Bool 串不承载块结构的严格证据 |
 | `subsetSum ∈ NP_F`、`subsetSum ∈ NP_Bool`、`subsetSum ∈ NP_classic` | ✅ 定理（witness 多项式时间：`toCBTM_polynomialTime`，线性界） |
 | `isPolynomialTime` 实化（接受路径 ≤ 多项式界） | ✅ 定义 + witness 证明（不再占位） |
-| **参数化等价：`P_cb0 = P_classic`**（CBTM|₀ ≡ₚₒₗy DTM） | ✅ 定理（`P_cb0_eq_P_classic`，双向接受保持） |
+| **参数化等价：`P_cb0 = P_classic`**（受限 CBTM ≡ₚₒₗy DTM，转移 (q,s,i) 同一模型） | ✅ 定理（`P_cb0_eq_P_classic`，双向接受保持） |
+| **`P_Bool = 经典 P`（时间对接）** | ✅ 定理（`P_Bool_eq_P_classic_poly`，双向：`IsP_classic_poly_subset_IsP_Bool` + `IsP_Bool_subset_IsP_classic_poly`） |
 | **零维定理：P_Bool ⟹ 本质维度 = 0** | ✅ 定理（`PClassZeroDimension_tape`） |
-| **框架内闭合：不存在受限/CBTM0 机器识别 α 编码子集和语言** | ✅ 定理（`no_restricted_recognizes_subsetSumF4`、`no_cbtm0_recognizes_subsetSumF4`，无前提） |
-| **维度 0 保持：任意 DTM 的 CBTM0 模拟 worstCaseDimension = 0** | ✅ 定理（`dtm_sim_worstCaseDimension_zero`） |
-| **矛盾传到 CBTM0：不存在经典 DTM 经 toCBTM 识别 α 编码子集和语言** | ✅ 定理（`no_dtm_recognizes_subsetSumF4`，无前提、无新公理） |
+| **框架内闭合：不存在受限机器识别 α 编码子集和语言** | ✅ 定理（`no_restricted_recognizes_subsetSumF4`，无前提） |
+| **维度 0 保持：任意 DTM 的受限 CBTM 模拟 worstCaseDimension = 0** | ✅ 定理（`dtm_sim_worstCaseDimension_zero`） |
+| **矛盾传到受限 CBTM：不存在经典 DTM 经 toCBTM 识别 α 编码子集和语言** | ✅ 定理（`no_dtm_recognizes_subsetSumF4`，无前提、无新公理） |
 | 投影-提升互逆、复合提升等式、等价类链条 | ✅ 定理 |
 | 素数平方根线性独立、维度下界、受限 κ = 0 | ✅ 定理 |
 | 相对化/代数化不变性 | ✅ 定理 |
@@ -268,7 +284,7 @@ no_dtm_recognizes_subsetSumF4 :
 1. **复杂度类定义在 F4 本质层**：编码（α 模式）= 定义的一部分，虚部内建——`P_F ⊊ NP_F`（`P_F_ss_NP_F`：`P_F ⊆ NP_F` + `P_F ≠ NP_F`）**全绿**；
 2. **Bool 层是实部投影**（等价类）：`P_Bool = π(P_F)`、`NP_Bool = π(NP_F)`——投影不保持分离；
 3. **"规范提升由 Bool 串恢复"不可行——有严格反例**：`encodeSubsetSumF4Real_not_injective`——`([1], target=3)` 与 `([3], target=1)` 编码相同（变长二进制无长度前缀 + target 区无分隔符，块区/target 区边界歧义）——Bool 串（α 标记投影后与数据 0 同符）更不能恢复块结构；
-4. 因此**语义统一的 Bool 层分离类定义不存在**（任意 Bool 语言无内建结构；子集和 Bool 串不可解析）——分离的严格形式是 F4 层（已证）+ 框架内闭合（CBTM 内部，矛盾传到 CBTM0，§6.5）。
+4. 因此**语义统一的 Bool 层分离类定义不存在**（任意 Bool 语言无内建结构；子集和 Bool 串不可解析）——分离的严格形式是 F4 层（已证）+ 框架内闭合（CBTM 内部，矛盾传到受限 CBTM，§6.5）。
 
 ---
 
@@ -289,8 +305,8 @@ no_dtm_recognizes_subsetSumF4 :
 | `PvsNP/ClassicalComplexity.lean` | 178 | Bool 层、等价类 `IsP_Bool/IsNP_Bool`、语言映射、`ntm2_language_recognition` |
 | `PvsNP/A2Bridge.lean` | 364 | 同构桥 `StructIso_preserves_accepts`(A2 消去)、长度引理(`canonical_path_length_le`、`int_nodup_bounded_length`)、`iso_path_backward` 长度分量 |
 | `PvsNP/SubsetSumInNP.lean` | 216 | **公理 V6**、`subsetSum_in_NP_F`、`toCBTM_polynomialTime`、`subsetSum_in_NP` |
-| `PvsNP/ParamEquiv.lean` | 783 | **参数化等价定理**：DTM 磁带语义、`IsP_classic/IsNP_classic/IsP_cb0`、`P_cb0_eq_P_classic`、重放/接受保持链 |
-| `PvsNP/PNPClosure.lean` | 249 | **框架内经典 P≠NP 闭合**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`subsetSum_in_NP_classic`、`isCBTM0_isRestricted`、`no_restricted/cbtm0/dtm_recognizes_subsetSumF4`、`dtm_sim_worstCaseDimension_zero`(P_Bool_neq_NP_Bool 已取消,注释保留) |
+| `PvsNP/ParamEquiv.lean` | 856 | **参数化等价定理**：DTM 磁带语义、`IsP_classic/IsNP_classic/IsP_cb0`、`P_cb0_eq_P_classic`、`P_Bool_eq_P_classic_poly`（第 7 节：`ClassicDTM.isPolynomialTime`/`IsP_classic_poly`/双向）、重放/接受保持链 |
+| `PvsNP/PNPClosure.lean` | 236 | **框架内经典 P≠NP 闭合**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`subsetSum_in_NP_classic`、`no_restricted/cbtm0/dtm_recognizes_subsetSumF4`、`dtm_sim_worstCaseDimension_zero`(P_Bool_neq_NP_Bool 已取消,注释保留) |
 | `PvsNP/FinalProof.lean` | 126 | `P_F_neq_NP_F`、`P_neq_NP_with_barriers` |
 | `PvsNP/LowerBound.lean` / `Barriers.lean` / `SubsetSumNTM2.lean` | 65/100/60 | 下界链、障碍不变性 |
 
