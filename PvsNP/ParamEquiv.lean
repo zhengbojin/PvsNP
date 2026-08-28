@@ -445,6 +445,11 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         simp [← hres2, f4ToBool]
       · rw [hcfg']
         dsimp [cbtm0CfgToDTM, step', DTMStepCfg, stepConfig]
+        congr
+        funext i
+        by_cases hi : i = cfg₀.headPos
+        · simp [hi]
+        · simp [hi]
 
 /-- CBTM0 接受（embed 输入）⟹ toClassicDTM 接受。 -/
 lemma cbtm0_accepts_to_dtm (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
@@ -684,7 +689,7 @@ theorem IsP_classic_subset_IsP_cb0 (K : BoolLanguage) (hP : IsP_classic K) : IsP
         simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
       rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
     · intro q s i j hs
-      simp [ClassicDTM.toCBTM]
+      rfl
   · intro x
     constructor
     · intro hproj
@@ -703,7 +708,7 @@ theorem IsP_classic_subset_IsP_cb0 (K : BoolLanguage) (hP : IsP_classic K) : IsP
           have hcases : s = F4.zero ∨ s = F4.one := by
             simpa [ClassicDTM.toCBTM, Finset.mem_insert, Finset.mem_singleton] using hs
           rcases hcases with rfl | rfl <;> simp [ClassicDTM.toCBTM]
-        · cases D.blankSym <;> simp [ClassicDTM.toCBTM]
+        · cases D.blankSym <;> simp [ClassicDTM.toCBTM, boolToF4, F4.zero, F4.one]
       have hembed : (D.toCBTM).tapeAccepts (embedBool (realProject w)) :=
         restricted_tapeAccepts_of_embed (D.toCBTM) hrest w hacc
       have hwx : embedBool (realProject w) = embedBool x := by rw [hw]
@@ -712,7 +717,7 @@ theorem IsP_classic_subset_IsP_cb0 (K : BoolLanguage) (hP : IsP_classic K) : IsP
     · intro hx
       have haccD : D.acceptsTape x := (hD x).2 hx
       refine ⟨embedBool x, ?_, dtm_accepts_to_cbtm D x haccD⟩
-      simp [embedBool, realProject]
+      simp [embedBool, realProject, F4.re]
 
 /-- CBTM|₀ 判定 ⟹ 经典 DTM 判定。
     投影接受 x ⟺ N 接受 embed x（重放：受限 N 的接受串投影 = 嵌入接受）
@@ -725,7 +730,7 @@ theorem IsP_cb0_subset_IsP_classic (K : BoolLanguage) (hP : IsP_cb0 K) : IsP_cla
   · intro hacc
     -- D 接受 x → N 接受 embed x（反向接受保持）→ 投影接受（w = embed x）→ x ∈ K
     have hNacc : N.tapeAccepts (embedBool x) := dtm_accepts_to_cbtm0 N h0 x hacc
-    exact (hN x).1 ⟨embedBool x, by simp [embedBool, realProject], hNacc⟩
+    exact (hN x).1 ⟨embedBool x, by simp [embedBool, realProject, F4.re], hNacc⟩
   · intro hx
     have hproj := (hN x).2 hx
     rcases hproj with ⟨w, hw, hacc⟩
@@ -739,8 +744,7 @@ theorem IsP_cb0_subset_IsP_classic (K : BoolLanguage) (hP : IsP_cb0 K) : IsP_cla
         simpa [Finset.mem_insert, Finset.mem_singleton] using hs
       · intro q s i hs
         exact h0.card_one q s i hs
-      · rw [h0.alphabet_eq]
-        exact N.h_blank_in_alphabet
+      · exact N.h_blank_in_alphabet
     have hembed : N.tapeAccepts (embedBool (realProject w)) :=
       restricted_tapeAccepts_of_embed N hrest w hacc
     have hwx : embedBool (realProject w) = embedBool x := by rw [hw]
