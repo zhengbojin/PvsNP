@@ -558,7 +558,7 @@ lemma cbtm_accepts_embed_to_dtm (M : ClassicDTM) (x : List Bool) :
   have h1 := cbtm0_accepts_to_dtm (M.toCBTM) (toCBTM_isCBTM0 M) x h
   exact @dtm_accepts_of_trans_eq (M.toCBTM.toClassicDTM (toCBTM_isCBTM0 M)) M
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
-    (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
+    (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM, boolToF4])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
     (fun q b => toClassicDTM_of_toCBTM_trans M q b) x h1
 
@@ -593,7 +593,11 @@ lemma dtm_path_to_cbtm0 (N : CBTM) (h0 : IsCBTM0 N) :
             have hb : N.blankSym ∈ N.alphabet := N.h_blank_in_alphabet
             rw [h0.alphabet_eq] at hb
             simp at hb
-            rcases hb with rfl | rfl <;> rfl
+            rcases hb with hb1 | hb2
+            · rw [hb1]
+              rfl
+            · rw [hb2]
+              rfl
           rw [← boolToF4_f4ToBool_of_im_false N.blankSym hbim]
           rfl
   | cons π₀ step cfg₀ hrc hfrom hread htrans hpos ih =>
