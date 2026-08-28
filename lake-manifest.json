@@ -91,6 +91,6 @@
    "inputRev": "v4.32.0",
    "inherited": true,
    "configFile": "lakefile.toml"}],
- "name": "mp",
+ "name": "pvsnp",
  "lakeDir": ".lake",
  "fixedToolchain": false}
