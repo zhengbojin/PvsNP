@@ -16,9 +16,9 @@
 - 非确定性分支的"虚部"不是外部编码约定，而是**计算模型的内在语义**（数计一体：语义内建于符号）；
 - 虚部标记（α = `(false,true)`）携带**不可公度性**语义——每个标记对应一个素数平方根生成元（线性独立），构成**本质维度 κ** 的度量单位；
 - 经典 Bool 层 = F4 层的**实部投影**（压平）：虚部与语言无关，只与计算模型有关；
-- 分离（P ≠ NP）发生在**虚部语义层**（F4 层，严格可证）；**框架内经典 Bool 层分离**由本质维度下界（论文层结论 κ ≥ n 作定理前提）反证闭合（`P_Bool ≠ NP_Bool`，见 §6.5、§7）。
+- 分离（P ≠ NP）发生在**虚部语义层**（F4 层，严格可证）；**框架内经典闭合**在 CBTM 内部完成——CBTM0 逐一步模拟 DTM（维度 0 保持），选项下界（κ ≥ n）与维度 0 的矛盾传到 CBTM0（`no_dtm_recognizes_subsetSumF4`，无前提、无新公理，见 §6.5）。
 
-**交付标准**：0 `sorry`、0 error、`lake build` 通过、全部结论由单一公理 `exists_NTM2_solves_subsetSum`（公理 V6，四条款）推出（参数化定理的前提 `h_kappa` 属论文层结论，显式标注，不进 Lean）。
+**交付标准**：0 `sorry`、0 error、`lake build` 通过、全部结论由单一公理 `exists_NTM2_solves_subsetSum`（公理 V6，四条款）推出。
 
 ---
 
@@ -213,22 +213,26 @@ P_cb0_eq_P_classic : {K | IsP_cb0 K} = {K | IsP_classic K}        （论文 thm:
 
 **意义**：CBTM|₀（受限 CBTM 的规范形态：字母表 {zero,one}、位置无关、确定性）与经典 DTM 外延等价——**CBTM 框架不引入超计算能力**，P 方向的经典-框架桥梁成立。
 
-### 6.5 框架内经典 P ≠ NP（`PNPClosure.lean`，172 行）
-
+### 6.5 框架内经典 P ≠ NP（`PNPClosure.lean`，闭合论证——无前提、无新公理）
 ```
 Verifiers_tape L          : Bool 语言验证器集合（磁带语义；isPolynomialTime + 投影识别）
 essentialDimension_tape L : Bool 语言本质维度（= 论文 κ(L)；Nat.find 最小验证器最坏维度）
-PClassZeroDimension_tape  : IsP_Bool L → essentialDimension_tape L refLen = 0
-                            （零维定理：P 的验证器可提升为受限机器 → κ = 0 → 本质维度 = 0）
-P_Bool_neq_NP_Bool (n) (hn : 0 < n)
-    (h_kappa : ∀ refLen, n ≤ essentialDimension_tape subsetSumBoolLanguage refLen) :
-    P_Bool ≠ NP_Bool
-  -- 反证：若 P_Bool = NP_Bool，则 subsetSum ∈ P_Bool（subsetSum_in_NP 已证）
-  --   → 零维定理：essentialDimension = 0
-  --   → 与前提 κ ≥ n > 0 矛盾（omega）
+PClassZeroDimension_tape  : IsP_Bool L → essentialDimension_tape L refLen = 0（零维定理）
+isCBTM0_isRestricted      : IsCBTM0 M → IsRestricted M
+no_restricted_recognizes_subsetSumF4 :
+    ¬ ∃ M, IsRestricted M ∧ (∀ w, M.tapeAccepts w ↔ subsetSumLanguageF4Real w)
+no_cbtm0_recognizes_subsetSumF4 :
+    ¬ ∃ M, IsCBTM0 M ∧ (∀ w, M.tapeAccepts w ↔ subsetSumLanguageF4Real w)
+dtm_sim_worstCaseDimension_zero (D) (n) :
+    worstCaseDimension (D.toCBTM) n = 0                 （维度 0 保持）
+no_dtm_recognizes_subsetSumF4 :
+    ¬ ∃ D : ClassicDTM, ∀ w, (D.toCBTM).tapeAccepts w ↔ subsetSumLanguageF4Real w
+    （矛盾传到 CBTM0）
 ```
 
-**前提定位**：`h_kappa`（κ(K_ss) ≥ n）是论文 `measure.C.0.7` 第 5 节结论（信息论下界 + 分支-激活引理，数计一体公理支撑）——**论文层面，不进 Lean，作为定理前提显式标注**。Lean 内证明的是：零维定理（P ⟹ κ = 0）+ 反证闭合（κ ≥ n 与 κ = 0 矛盾）。
+**论证形态（2026-08-28 用户裁决：无需证明 Bool 层）**：任意经典 DTM D → `D.toCBTM` 是 CBTM0（受限机器）→ κ = 0、worstCaseDimension = 0（**维度 0 保持到所有 P 算法**——CBTM0 逐一步模拟 DTM，参数化等价定理）；子集和 α 编码语言 L_F4 的任意识别者 κ ≥ 元素数（**选项下界**——代数生成元扩张（√pᵢ 线性无关）绑定元素选择，信息论：2ⁿ 个部分和需要 n 个独立维度；`subsetSum_kappa_lower_bound` 是 Lean 内定理，非公理）⟹ 不存在受限/CBTM0 机器识别 L_F4（κ ≥ 1 vs κ = 0）⟹ 不存在经典 DTM 经 toCBTM 识别 L_F4（**矛盾传到 CBTM0**）。
+
+**历史**：Bool 层条件闭合 `P_Bool_neq_NP_Bool`（前提 h_kappa = 论文层 κ ≥ n 下界）于 2026-08-28 取消——框架内闭合无前提、无新公理，取代之（取消记录保留在 PNPClosure.lean 注释中）。
 
 ---
 
@@ -246,23 +250,20 @@ P_Bool_neq_NP_Bool (n) (hn : 0 < n)
 | `isPolynomialTime` 实化（接受路径 ≤ 多项式界） | ✅ 定义 + witness 证明（不再占位） |
 | **参数化等价：`P_cb0 = P_classic`**（CBTM|₀ ≡ₚₒₗy DTM） | ✅ 定理（`P_cb0_eq_P_classic`，双向接受保持） |
 | **零维定理：P_Bool ⟹ 本质维度 = 0** | ✅ 定理（`PClassZeroDimension_tape`） |
-| **闭合：`P_Bool ≠ NP_Bool`（前提 κ ≥ n）** | ✅ 条件定理（`P_Bool_neq_NP_Bool`，前提 = 论文层 κ 下界） |
+| **框架内闭合：不存在受限/CBTM0 机器识别 α 编码子集和语言** | ✅ 定理（`no_restricted_recognizes_subsetSumF4`、`no_cbtm0_recognizes_subsetSumF4`，无前提） |
+| **维度 0 保持：任意 DTM 的 CBTM0 模拟 worstCaseDimension = 0** | ✅ 定理（`dtm_sim_worstCaseDimension_zero`） |
+| **矛盾传到 CBTM0：不存在经典 DTM 经 toCBTM 识别 α 编码子集和语言** | ✅ 定理（`no_dtm_recognizes_subsetSumF4`，无前提、无新公理） |
 | 投影-提升互逆、复合提升等式、等价类链条 | ✅ 定理 |
 | 素数平方根线性独立、维度下界、受限 κ = 0 | ✅ 定理 |
 | 相对化/代数化不变性 | ✅ 定理 |
 
-### 7.2 前提的定位（诚实声明）
+### 7.2 历史记录：Bool 层条件闭合（已取消）
 
-**`P_Bool ≠ NP_Bool` 是条件定理**：其前提 `h_kappa : ∀ refLen, n ≤ essentialDimension_tape subsetSumBoolLanguage refLen`（子集和的本质维度下界）**未在 Lean 内证明**——它是论文 `measure.C.0.7` 第 5 节结论（信息论下界 + 分支-激活引理，由数计一体公理支撑），作为定理参数显式标注，不进 Lean。Lean 内严格证明的是：
+**`P_Bool_neq_NP_Bool`（前提 h_kappa = 论文层 κ ≥ n 选项下界）已于 2026-08-28 取消**——按用户裁决"无需证明 Bool 层"，框架内闭合（§6.5）无前提、无新公理，取代之。取消记录保留在 PNPClosure.lean 注释中。
 
-1. **零维定理**：`IsP_Bool L → essentialDimension_tape L n = 0`（P 类语言的验证器可提升为受限机器，κ ≡ 0）；
-2. **反证闭合**：κ ≥ n > 0 与 κ = 0 矛盾。
+### 7.3 Bool 层字面分离（经典开放命题——非本项目结论）
 
-因此工程保持"0 sorry、单公理"（唯一 axiom = 公理 V6）；κ 下界属论文层前提，不伪装为 Lean 内定理。
-
-### 7.3 无参数前提的 Bool 层字面分离（经典开放命题）
-
-**不依赖 κ 下界的前提下，`NP_Bool ≠ P_Bool`（即 `subsetSumBoolLanguage ∉ P_Bool`）未证，且等价于经典开放命题。** 逐项原因：
+**`NP_Bool ≠ P_Bool`（即 `subsetSumBoolLanguage ∉ P_Bool`）未证，且等价于经典开放命题。** 逐项原因：
 
 1. **π 不单射**：α 与 zero 同实部 false、one 与 beta 同实部 true——投影丢失虚部；`P_F ≠ NP_F` 推不出投影后分离；
 2. **等价类提升自由度**：`IsP_Bool K := ∃ L, π(L) = K ∧ IsP_F L` 允许"选择位虚部全 false"的提升（embedUp 型）——受限机器读选择位是合法操作（虚部 false），κ 论证失效；判定这种提升 = 判定经典 Bool 子集和；
@@ -270,7 +271,7 @@ P_Bool_neq_NP_Bool (n) (hn : 0 < n)
 4. **时间下界缺失（实化后）**：`isPolynomialTime` 已实化为真多项式界；实化后，"多项式确定性机器判 Bool 子集和不可能" = 经典 P≠NP 本身（开放问题）——信息论/鸽巢论证在计算复杂性理论中不成立；事实上 `IsP_Bool K ⟺ 经典子集和 ∈ P`（两向构造）；
 5. **枚举不可行**："枚举每个 P 的语言逐个排除" = `¬IsP_Bool K` 的直接展开，每个子问题都是同一个开放命题的实例。
 
-**结论**：分离的严格落点在虚部语义层（F4，已证）；经典 Bool 层的闭合依赖论文层 κ 下界（参数化，§6.5）；无前提的 Bool 层字面分离 ⟺ 经典 P≠NP，开放。这与论文立场一致："直接证明 P≠NP 不可能（经典语境），框架的贡献 = 语义层分离 + κ 下界前提下的闭合"。
+**结论**：分离的严格落点在虚部语义层（F4，已证）；框架内闭合（CBTM 内部，矛盾传到 CBTM0——无前提、无新公理，§6.5）；Bool 层字面分离 ⟺ 经典 P≠NP，开放，**非本项目结论**。这与论文立场一致："直接证明 P≠NP 不可能（经典语境），框架的贡献 = 语义层分离 + CBTM 内部闭合"。
 
 ### 7.4 语义统一（数计一体）的严格落点
 
@@ -301,7 +302,7 @@ P_Bool_neq_NP_Bool (n) (hn : 0 < n)
 | `PvsNP/A2Bridge.lean` | 364 | 同构桥 `StructIso_preserves_accepts`(A2 消去)、长度引理(`canonical_path_length_le`、`int_nodup_bounded_length`)、`iso_path_backward` 长度分量 |
 | `PvsNP/SubsetSumInNP.lean` | 216 | **公理 V6**、`subsetSum_in_NP_F`、`toCBTM_polynomialTime`、`subsetSum_in_NP` |
 | `PvsNP/ParamEquiv.lean` | 783 | **参数化等价定理**：DTM 磁带语义、`IsP_classic/IsNP_classic/IsP_cb0`、`P_cb0_eq_P_classic`、重放/接受保持链 |
-| `PvsNP/PNPClosure.lean` | 172 | **框架内经典 P≠NP 闭合**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`P_Bool_neq_NP_Bool`、`subsetSum_in_NP_classic` |
+| `PvsNP/PNPClosure.lean` | 249 | **框架内经典 P≠NP 闭合**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`subsetSum_in_NP_classic`、`isCBTM0_isRestricted`、`no_restricted/cbtm0/dtm_recognizes_subsetSumF4`、`dtm_sim_worstCaseDimension_zero`(P_Bool_neq_NP_Bool 已取消,注释保留) |
 | `PvsNP/FinalProof.lean` | 126 | `P_F_neq_NP_F`、`P_neq_NP_with_barriers` |
 | `PvsNP/LowerBound.lean` / `Barriers.lean` / `SubsetSumNTM2.lean` | 65/100/60 | 下界链、障碍不变性 |
 
