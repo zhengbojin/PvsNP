@@ -369,7 +369,7 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         have hempty : N.transition (cfg₀.state, step.readSym, cfg₀.headPos) = ∅ :=
           N.h_transition_outside cfg₀.state step.readSym cfg₀.headPos hnot
         have hmem' : step.result ∈ N.transition (cfg₀.state, step.readSym, cfg₀.headPos) := by
-          simpa [hfrom, hread] using htrans
+          simpa [hfrom, ← hread] using htrans
         rw [hempty] at hmem'
         simpa using hmem'
       have him : F4.im step.readSym = false := by
@@ -486,7 +486,7 @@ lemma toClassicDTM_of_toCBTM_trans (M : ClassicDTM) (q : ℕ) (b : Bool) :
   rw [choose_eq_of_card_one (M.toCBTM.transition (q, boolToF4 b, 0))
     ((toCBTM_isCBTM0 M).card_one q (boolToF4 b) 0 (boolToF4_mem_alphabet_of_isCBTM0 (toCBTM_isCBTM0 M) b)) hcard]
   rw [hch]
-  cases b <;> simp [f4ToBool]
+  cases b <;> simp [f4ToBool, boolToF4]
 
 /-- 转移相同的两台 DTM：路径重放（同一路径在 M2 上可达，配置逐字段保持）。 -/
 lemma dtm_replay_of_trans_eq {M1 M2 : ClassicDTM}
