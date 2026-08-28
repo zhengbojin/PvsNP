@@ -229,7 +229,7 @@ P_Bool_eq_P_classic_poly : {K | IsP_Bool K} = {K | IsP_classic_poly K}  （P_Boo
 
 **意义**：CBTM|₀（受限 CBTM：字母表 {zero,one}、确定性、转移 (q,s,i)）与经典 DTM 是**同一模型**（仅符号载体 F4{0,1} ↔ Bool 不同）——**CBTM 框架不引入超计算能力**，P 方向经典-框架桥梁成立；`P_Bool = 经典 P` 使框架的 Bool 层类与传统复杂度类严格对接。
 
-### 6.5 框架内经典 P ≠ NP（`PNPClosure.lean`，闭合论证——无前提、无新公理）
+### 6.5 框架内闭合（`PNPClosure.lean`，维度矛盾论证——无前提、无新公理；对象是 α 编码 F4 语言，非经典 Bool 子集和）
 ```
 Verifiers_tape L          : Bool 语言验证器集合（磁带语义；isPolynomialTime + 投影识别）
 essentialDimension_tape L : Bool 语言本质维度（= 论文 κ(L)；Nat.find 最小验证器最坏维度）
@@ -306,7 +306,7 @@ no_dtm_recognizes_subsetSumF4 :
 | `PvsNP/A2Bridge.lean` | 364 | 同构桥 `StructIso_preserves_accepts`(A2 消去)、长度引理(`canonical_path_length_le`、`int_nodup_bounded_length`)、`iso_path_backward` 长度分量 |
 | `PvsNP/SubsetSumInNP.lean` | 216 | **公理 V6**、`subsetSum_in_NP_F`、`toCBTM_polynomialTime`、`subsetSum_in_NP` |
 | `PvsNP/ParamEquiv.lean` | 856 | **参数化等价定理**：DTM 磁带语义、`IsP_classic/IsNP_classic/IsP_cb0`、`P_cb0_eq_P_classic`、`P_Bool_eq_P_classic_poly`（第 7 节：`ClassicDTM.isPolynomialTime`/`IsP_classic_poly`/双向）、重放/接受保持链 |
-| `PvsNP/PNPClosure.lean` | 236 | **框架内经典 P≠NP 闭合**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`subsetSum_in_NP_classic`、`no_restricted/cbtm0/dtm_recognizes_subsetSumF4`、`dtm_sim_worstCaseDimension_zero`(P_Bool_neq_NP_Bool 已取消,注释保留) |
+| `PvsNP/PNPClosure.lean` | 236 | **框架内闭合（维度矛盾，无前提）**：`Verifiers_tape`、`essentialDimension_tape`、`PClassZeroDimension_tape`、`subsetSum_in_NP_classic`、`no_restricted/cbtm0/dtm_recognizes_subsetSumF4`、`dtm_sim_worstCaseDimension_zero`(P_Bool_neq_NP_Bool 已取消,注释保留) |
 | `PvsNP/FinalProof.lean` | 126 | `P_F_neq_NP_F`、`P_neq_NP_with_barriers` |
 | `PvsNP/LowerBound.lean` / `Barriers.lean` / `SubsetSumNTM2.lean` | 65/100/60 | 下界链、障碍不变性 |
 
@@ -321,7 +321,7 @@ cd D:\lean4\pvsnp
 lake build                          # 全链编译，0 error（8670+ jobs）
 lake env lean PvsNP/FinalProof.lean # 单文件验证（F4 层分离）
 lake env lean PvsNP/ParamEquiv.lean # 参数化等价定理（P_cb0 = P_classic）
-lake env lean PvsNP/PNPClosure.lean # 框架内经典 P≠NP 闭合
+lake env lean PvsNP/PNPClosure.lean # 框架内闭合（维度矛盾，无前提）
 grep -c "sorry" PvsNP/*.lean        # 0（无 sorry）
 grep -c "^axiom" PvsNP/*.lean       # 1（单公理 exists_NTM2_solves_subsetSum）
 ```
