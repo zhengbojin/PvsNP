@@ -445,11 +445,6 @@ lemma cbtm0_path_to_dtm (N : CBTM) (h0 : IsCBTM0 N) :
         simp [← hres2, f4ToBool]
       · rw [hcfg']
         dsimp [cbtm0CfgToDTM, step', DTMStepCfg, stepConfig]
-        congr
-        · funext i
-          by_cases hi : i = cfg₀.headPos
-          · simp [hi]
-          · simp [hi]
 
 /-- CBTM0 接受（embed 输入）⟹ toClassicDTM 接受。 -/
 lemma cbtm0_accepts_to_dtm (N : CBTM) (h0 : IsCBTM0 N) (x : List Bool) :
@@ -474,9 +469,9 @@ lemma toCBTM_isCBTM0 (M : ClassicDTM) : IsCBTM0 (M.toCBTM) := by
 /-- 转移相等：(M.toCBTM.toClassicDTM) 的转移 = M 的转移（choose 唯一成员 + 提升恒等）。 -/
 lemma toClassicDTM_of_toCBTM_trans (M : ClassicDTM) (q : ℕ) (b : Bool) :
     (M.toCBTM.toClassicDTM (toCBTM_isCBTM0 M)).transition (q, b) = M.transition (q, b) := by
-  have hcard : (M.toCBTM.transition (q, boolToF4 b, 0)).card = 1 := by
-    simpa [ClassicDTM.toCBTM, ClassicDTM.toCBTMTrans_zero, ClassicDTM.toCBTMTrans_one] using
-      (toCBTM_isCBTM0 M).card_one q (boolToF4 b) 0 (boolToF4_mem_alphabet_of_isCBTM0 (toCBTM_isCBTM0 M) b)
+  have hcard : (M.toCBTM.transition (q, boolToF4 b, 0)).card = 1 :=
+    (toCBTM_isCBTM0 M).card_one q (boolToF4 b) 0
+      (boolToF4_mem_alphabet_of_isCBTM0 (toCBTM_isCBTM0 M) b)
   have hch : (card_eq_one_unique_mem (M.toCBTM.transition (q, boolToF4 b, 0)) hcard).choose =
       { nextState := (M.transition (q, b)).nextState,
         writeSym := boolToF4 (M.transition (q, b)).writeSym,
@@ -532,7 +527,6 @@ lemma dtm_replay_of_trans_eq {M1 M2 : ClassicDTM}
       · rw [hhp']
         exact hpos
       · dsimp [DTMStepCfg]
-        rfl
       · dsimp [DTMStepCfg]
         rw [hhp']
       · intro i
@@ -540,9 +534,9 @@ lemma dtm_replay_of_trans_eq {M1 M2 : ClassicDTM}
         rw [hhp']
         by_cases hi : i = cfg₀.headPos
         · subst i
-          rfl
+          simp [hhp']
         · rw [htape' i]
-          rfl
+          simp [hhp']
 
 /-- 转移相同、起始状态与接受状态集相同的两台 DTM：接受保持。 -/
 lemma dtm_accepts_of_trans_eq {M1 M2 : ClassicDTM}
@@ -555,14 +549,15 @@ lemma dtm_accepts_of_trans_eq {M1 M2 : ClassicDTM}
   rcases dtm_replay_of_trans_eq hstart hblank h x π cfg hr with ⟨cfg', hr', hst', _hhp, _htape⟩
   refine ⟨π, cfg', hr', ?_⟩
   rw [hst']
-  rwa [haccs]
+  rw [← haccs]
+  exact hacc
 
 /-- toCBTM 接受（embed 输入）⟹ DTM 接受（反向：toCBTM 是 CBTM0）。 -/
 lemma cbtm_accepts_embed_to_dtm (M : ClassicDTM) (x : List Bool) :
     (M.toCBTM).tapeAccepts (embedBool x) → M.acceptsTape x := by
   intro h
   have h1 := cbtm0_accepts_to_dtm (M.toCBTM) (toCBTM_isCBTM0 M) x h
-  exact dtm_accepts_of_trans_eq
+  exact @dtm_accepts_of_trans_eq (M.toCBTM.toClassicDTM (toCBTM_isCBTM0 M)) M
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
     (by simp [CBTM.toClassicDTM, ClassicDTM.toCBTM])
